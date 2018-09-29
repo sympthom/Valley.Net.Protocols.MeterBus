@@ -51,8 +51,6 @@ var packet = new MBusPacketSerialiser(frame)
 
 ## Changelog
 
-### v0.1.1 (2018.07.17)
-* capability to scan an address range for connected meters to a collector/gateway
-
-### v0.1.0 (2018.07.16)
+### v1.0.0 (2018.09.29)
 * initial release
+
