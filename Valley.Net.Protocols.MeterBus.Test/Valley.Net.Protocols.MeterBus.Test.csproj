@@ -67,8 +67,8 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\MeterBus.Core\Valley.Net.Protocols.MeterBus.csproj">
-      <Project>{fed07c61-6500-4283-a930-3b7a5e72c8e3}</Project>
+    <ProjectReference Include="..\Valley.Net.Protocols.MeterBus\Valley.Net.Protocols.MeterBus.csproj">
+      <Project>{05b76bea-f9af-48bb-92c5-3b739f00e6b7}</Project>
       <Name>Valley.Net.Protocols.MeterBus</Name>
     </ProjectReference>
   </ItemGroup>
