@@ -46,9 +46,9 @@ namespace Valley.Net.Protocols.MeterBus
             return buffer;
         }
 
-        public static string ToHex(this byte[] source)
+        public static string ToHex(this byte[] source, string separator = " ")
         {
-            return source != null ? string.Join(" ", source.Select(x => x.ToString("x2"))) : null;
+            return source != null ? string.Join(separator, source.Select(x => x.ToString("x2"))) : null;
         }
 
         public static string BCDDecode(this byte[] bytes, int length)
