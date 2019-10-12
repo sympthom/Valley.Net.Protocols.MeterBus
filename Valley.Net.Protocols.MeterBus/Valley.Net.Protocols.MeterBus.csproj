@@ -10,9 +10,4 @@
     <PackageReference Include="Valley.Net.Bindings" Version="1.0.1" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Serializers\Json\" />
-    <Folder Include="Serializers\Xml\" />
-  </ItemGroup>
-
 </Project>

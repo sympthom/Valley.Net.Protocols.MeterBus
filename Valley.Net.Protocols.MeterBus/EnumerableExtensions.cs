@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Valley.Net.Protocols.MeterBus.Core
+namespace Valley.Net.Protocols.MeterBus
 {
     public static class EnumerableExtensions
     {

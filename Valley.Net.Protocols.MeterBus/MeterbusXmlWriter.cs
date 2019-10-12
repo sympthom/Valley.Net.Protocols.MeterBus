@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Xml;
 
-namespace Valley.Net.Protocols.MeterBus.Core
+namespace Valley.Net.Protocols.MeterBus
 {
     public sealed class MeterbusXmlWriter : XmlWriter
     {

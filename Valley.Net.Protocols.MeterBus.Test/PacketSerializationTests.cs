@@ -5,9 +5,9 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using Valley.Net.Protocols.MeterBus.Frames;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Valley.Net.Protocols.MeterBus.Serializers.Packet;
+using Valley.Net.Protocols.MeterBus.EN13757_2;
+using Valley.Net.Protocols.MeterBus.EN13757_3;
 
 namespace Valley.Net.Protocols.MeterBus.Test
 {
@@ -19,18 +19,18 @@ namespace Valley.Net.Protocols.MeterBus.Test
         {
             /*
              68 1F 1F 68 header of RSP_UD telegram (length 1Fh=31d bytes)
-08 02 72 C field = 08 (RSP), address 2, CI field 72H (var.,LSByte first)
-78 56 34 12 identification number = 12345678
-24 40 01 07 manufacturer ID = 4024h (PAD in EN 61107), generation 1, water
-55 00 00 00 TC = 55h = 85d, Status = 00h, Signature = 0000h
-03 13 15 31 00 Data block 1: unit 0, storage No 0, no tariff, instantaneous volume,
-12565 l (24 bit integer)
-DA 02 3B 13 01 Data block 2: unit 0, storage No 5, no tariff, maximum volume flow,
-113 l/h (4 digit BCD)
-8B 60 04 37 18 02 Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy,
-44 6 Application Layer
-218,37 kWh (6 digit BCD)
-18 16 checksum and stopsign
+            08 02 72 C field = 08 (RSP), address 2, CI field 72H (var.,LSByte first)
+            78 56 34 12 identification number = 12345678
+            24 40 01 07 manufacturer ID = 4024h (PAD in EN 61107), generation 1, water
+            55 00 00 00 TC = 55h = 85d, Status = 00h, Signature = 0000h
+            03 13 15 31 00 Data block 1: unit 0, storage No 0, no tariff, instantaneous volume,
+            12565 l (24 bit integer)
+            DA 02 3B 13 01 Data block 2: unit 0, storage No 5, no tariff, maximum volume flow,
+            113 l/h (4 digit BCD)
+            8B 60 04 37 18 02 Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy,
+            44 6 Application Layer
+            218,37 kWh (6 digit BCD)
+            18 16 checksum and stopsign
              */
             var data = "68 1F 1F 68 08 02 72 78 56 34 12 24 40 01 07 55 00 00 00 03 13 15 31 00 DA 02 3B 13 01 8B 60 04 37 18 02 18 16"
                 .HexToBytes();

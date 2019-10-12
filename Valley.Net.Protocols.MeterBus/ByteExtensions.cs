@@ -1,4 +1,4 @@
-﻿using Valley.Net.Protocols.MeterBus.Frames;
+﻿using Valley.Net.Protocols.MeterBus.EN13757_2;
 using System;
 using System.Collections.Generic;
 using System.Linq;
