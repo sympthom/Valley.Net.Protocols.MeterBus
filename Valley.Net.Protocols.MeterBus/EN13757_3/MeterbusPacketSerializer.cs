@@ -1,5 +1,4 @@
-﻿using Valley.Net.Protocols.MeterBus.Core;
-using Valley.Net.Protocols.MeterBus.EN13757_2;
+﻿using Valley.Net.Protocols.MeterBus.EN13757_2;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -157,71 +156,71 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_3
                         .ToArray();
 
                     var value = x.OfType<Value>().Single();
-
+                     
                     switch (dif.DataType)
                     {
                         case DataTypes._No_data:
                             record.Value = null;
                             break;
                         case DataTypes._8_Bit_Integer:
-                            System.Diagnostics.Debug.Assert(data.Data.Length == 1);
-                            record.Value = data.Data.Single();
+                            System.Diagnostics.Debug.Assert(value.Data.Length == 1);
+                            record.Value = value.Data.Single();
                             break;
                         case DataTypes._16_Bit_Integer:
-                            System.Diagnostics.Debug.Assert(data.Data.Length == 2);
-                            record.Value = BitConverter.ToInt16(data.Data, 0);
+                            System.Diagnostics.Debug.Assert(value.Data.Length == 2);
+                            record.Value = BitConverter.ToInt16(value.Data, 0);
                             break;
                         case DataTypes._24_Bit_Integer:
-                            System.Diagnostics.Debug.Assert(data.Data.Length == 3);
+                            System.Diagnostics.Debug.Assert(value.Data.Length == 3);
                        
                             var data = new byte[4];
-                            data[0] = data.Data[0];
-                            data[1] = data.Data[1];
-                            data[2] = data.Data[2];
+                            data[0] = value.Data[0];
+                            data[1] = value.Data[1];
+                            data[2] = value.Data[2];
 
                             record.Value = BitConverter.ToInt32(data, 0);
                             break;
                         case DataTypes._32_Bit_Integer:
-                            System.Diagnostics.Debug.Assert(data.Data.Length == 4);
-                            record.Value = BitConverter.ToInt32(data.Data, 0);
+                            System.Diagnostics.Debug.Assert(value.Data.Length == 4);
+                            record.Value = BitConverter.ToInt32(value.Data, 0);
                             break;
                         case DataTypes._32_Bit_Real:
-                            System.Diagnostics.Debug.Assert(data.Data.Length == 4);
-                            record.Value = BitConverter.ToSingle(data.Data, 0);
+                            System.Diagnostics.Debug.Assert(value.Data.Length == 4);
+                            record.Value = BitConverter.ToSingle(value.Data, 0);
                             break;
                         case DataTypes._48_Bit_Integer:
-                            System.Diagnostics.Debug.Assert(data.Data.Length == 6);
-                            record.Value = BitConverter.ToInt64(new byte[] { 0, 0 }.Concat(data.Data).ToArray(), 0);
+                            System.Diagnostics.Debug.Assert(value.Data.Length == 6);
+                            record.Value = BitConverter.ToInt64(new byte[] { 0, 0 }.Concat(value.Data).ToArray(), 0);
                             break;
                         case DataTypes._64_Bit_Integer:
-                            System.Diagnostics.Debug.Assert(data.Data.Length == 8);
-                            record.Value = BitConverter.ToInt64(data.Data, 0);
+                            System.Diagnostics.Debug.Assert(value.Data.Length == 8);
+                            record.Value = BitConverter.ToInt64(value.Data, 0);
                             break;
                         case DataTypes._Selection_for_Readout:
                             throw new NotImplementedException();
                         case DataTypes._2_digit_BCD:
-                            System.Diagnostics.Debug.Assert(data.Data.Length == 1);
-                            record.Value = sbyte.Parse(data.Data.BCDDecode(1));
+                            System.Diagnostics.Debug.Assert(value.Data.Length == 1);
+                            record.Value = sbyte.Parse(value.Data.BCDDecode(1));
                             break;
                         case DataTypes._4_digit_BCD:
-                            System.Diagnostics.Debug.Assert(data.Data.Length == 2);
-                            record.Value = Int16.Parse(data.Data.BCDDecode(2));
+                            System.Diagnostics.Debug.Assert(value.Data.Length == 2);
+                            record.Value = Int16.Parse(value.Data.BCDDecode(2));
                             break;
                         case DataTypes._6_digit_BCD:
-                            System.Diagnostics.Debug.Assert(data.Data.Length == 3);
-                            record.Value = Int32.Parse(data.Data.BCDDecode(3));
+                            System.Diagnostics.Debug.Assert(value.Data.Length == 3);
+                            record.Value = Int32.Parse(value.Data.BCDDecode(3));
                             break;
                         case DataTypes._8_digit_BCD:
-                            System.Diagnostics.Debug.Assert(data.Data.Length == 4);
-                            record.Value = Int32.Parse(data.Data.BCDDecode(4));
+                            System.Diagnostics.Debug.Assert(value.Data.Length == 4);
+                            record.Value = Int32.Parse(value.Data.BCDDecode(4));
                             break;
                         case DataTypes._variable_length:
-                            System.Diagnostics.Debug.Assert(data.Data == null);
+                            System.Diagnostics.Debug.Assert(value.Data == null);
                             //record.Value = reader.ReadValue();
                             break;
                         case DataTypes._12_digit_BCD:
-                            System.Diagnostics.Debug.Assert(data.Data.Length == 6);
-                            record.Value = Int64.Parse(data.Data.BCDToString());
+                            System.Diagnostics.Debug.Assert(value.Data.Length == 6);
+                            record.Value = Int64.Parse(value.Data.BCDToString());
                             break;
                     }
 
