@@ -171,14 +171,16 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_3
                             record.Value = BitConverter.ToInt16(value.Data, 0);
                             break;
                         case DataTypes._24_Bit_Integer:
-                            System.Diagnostics.Debug.Assert(value.Data.Length == 3);
-                       
-                            var data = new byte[4];
-                            data[0] = value.Data[0];
-                            data[1] = value.Data[1];
-                            data[2] = value.Data[2];
+                            {
+                                System.Diagnostics.Debug.Assert(value.Data.Length == 3);
 
-                            record.Value = BitConverter.ToInt32(data, 0);
+                                var data = new byte[4];
+                                data[0] = value.Data[0];
+                                data[1] = value.Data[1];
+                                data[2] = value.Data[2];
+
+                                record.Value = BitConverter.ToInt32(data, 0);
+                            }
                             break;
                         case DataTypes._32_Bit_Integer:
                             System.Diagnostics.Debug.Assert(value.Data.Length == 4);
@@ -189,8 +191,19 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_3
                             record.Value = BitConverter.ToSingle(value.Data, 0);
                             break;
                         case DataTypes._48_Bit_Integer:
-                            System.Diagnostics.Debug.Assert(value.Data.Length == 6);
-                            record.Value = BitConverter.ToInt64(new byte[] { 0, 0 }.Concat(value.Data).ToArray(), 0);
+                            {
+                                System.Diagnostics.Debug.Assert(value.Data.Length == 6);
+
+                                var data = new byte[8];
+                                data[0] = value.Data[0];
+                                data[1] = value.Data[1];
+                                data[2] = value.Data[2];
+                                data[3] = value.Data[3];
+                                data[4] = value.Data[4];
+                                data[5] = value.Data[5];
+
+                                record.Value = BitConverter.ToInt32(data, 0);
+                            }
                             break;
                         case DataTypes._64_Bit_Integer:
                             System.Diagnostics.Debug.Assert(value.Data.Length == 8);
