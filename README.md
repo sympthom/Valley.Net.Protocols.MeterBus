@@ -51,6 +51,12 @@ var packet = new MBusPacketSerialiser(frame)
 
 ## Changelog
 
+### v1.0.2 (2019.10.13)
+* serial communication cabability
+
+### v1.0.1 (2019.10.12)
+* bug fixes
+
 ### v1.0.0 (2018.09.29)
 * initial release
 
