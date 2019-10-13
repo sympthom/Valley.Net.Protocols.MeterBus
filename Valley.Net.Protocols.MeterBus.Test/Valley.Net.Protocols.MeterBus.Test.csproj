@@ -9,7 +9,9 @@
   <ItemGroup>
     <PackageReference Include="MSTest.TestAdapter" Version="2.0.0" />
     <PackageReference Include="MSTest.TestFramework" Version="2.0.0" />
+    <PackageReference Include="System.IO.Ports" Version="4.6.0" />
     <PackageReference Include="Valley.Net.Bindings" Version="1.0.2" />
+    <PackageReference Include="Valley.Net.Bindings.Serial" Version="1.0.0" />
   </ItemGroup>
 
   <ItemGroup>
