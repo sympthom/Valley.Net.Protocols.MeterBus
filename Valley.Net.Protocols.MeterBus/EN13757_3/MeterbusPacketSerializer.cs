@@ -13,6 +13,11 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_3
     /// </summary>
     public static class MeterbusPacketSerializer
     {
+        /// <summary>
+        /// Convert frame (physical and link layer) to packet (application layer).
+        /// </summary>
+        /// <param name="frame"></param>
+        /// <returns></returns>
         public static Packet AsPacket(this Frame frame)
         {
             if (frame == null)

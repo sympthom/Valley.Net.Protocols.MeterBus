@@ -14,14 +14,12 @@ namespace Valley.Net.Protocols.MeterBus
     public sealed class MBusMaster
     {
         private readonly IEndPointBinding _binding;
-        private readonly IPEndPoint _endpoint;
 
         public event EventHandler<MeterEventArgs> Meter;
 
-        public MBusMaster(IEndPointBinding binding, IPEndPoint endpoint)
+        public MBusMaster(IEndPointBinding binding)
         {
             _binding = binding ?? throw new ArgumentNullException(nameof(binding));
-            _endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
         }
 
         /// <summary>
@@ -48,7 +46,7 @@ namespace Valley.Net.Protocols.MeterBus
 
             try
             {
-                await _binding.ConnectAsync(_endpoint);
+                await _binding.ConnectAsync();
 
                 await _binding.SendAsync(new ShortFrame((byte)ControlMask.SND_NKE, address));
 
@@ -71,7 +69,7 @@ namespace Valley.Net.Protocols.MeterBus
 
             try
             {
-                await _binding.ConnectAsync(_endpoint);
+                await _binding.ConnectAsync();
 
                 await _binding.SendAsync(new LongFrame((byte)ControlMask.SND_UD, (byte)ControlInformation.DATA_SEND, address, data, length));
             }
@@ -103,7 +101,7 @@ namespace Valley.Net.Protocols.MeterBus
 
             try
             {
-                await _binding.ConnectAsync(_endpoint);
+                await _binding.ConnectAsync();
 
                 await _binding.SendAsync(new LongFrame((byte)ControlMask.SND_UD, (byte)ControlInformation.DATA_SEND, address, data, length));
             }
@@ -117,7 +115,7 @@ namespace Valley.Net.Protocols.MeterBus
         {
             try
             {
-                await _binding.ConnectAsync(_endpoint);
+                await _binding.ConnectAsync();
 
                 await _binding.SendAsync(new ControlFrame((byte)ControlMask.SND_UD, (byte)ControlInformation.APPLICATION_RESET, address));
             }
@@ -162,7 +160,7 @@ namespace Valley.Net.Protocols.MeterBus
 
             try
             {
-                await _binding.ConnectAsync(_endpoint);
+                await _binding.ConnectAsync();
 
                 await _binding.SendAsync(new ShortFrame((byte)ControlMask.REQ_UD1, address));
 
@@ -212,7 +210,7 @@ namespace Valley.Net.Protocols.MeterBus
 
             try
             {
-                await _binding.ConnectAsync(_endpoint);
+                await _binding.ConnectAsync();
 
                 await _binding.SendAsync(new ShortFrame((byte)ControlMask.REQ_UD2, address)); // request data
 
@@ -231,7 +229,7 @@ namespace Valley.Net.Protocols.MeterBus
         {
             try
             {
-                await _binding.ConnectAsync(_endpoint);
+                await _binding.ConnectAsync();
 
                 await _binding.SendAsync(new ShortFrame((byte)ControlMask.SND_NKE, address));
             }
@@ -266,7 +264,7 @@ namespace Valley.Net.Protocols.MeterBus
 
             try
             {
-                await _binding.ConnectAsync(_endpoint);
+                await _binding.ConnectAsync();
 
                 foreach (var address in addresses)
                 {

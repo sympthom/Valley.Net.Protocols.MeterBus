@@ -24,10 +24,10 @@ namespace Valley.Net.Protocols.MeterBus.Test
         {
             var resetEvent = new AutoResetEvent(false);
 
-            var endpoint = new TcpBinding(new MeterbusFrameSerializer());
+            var endpoint = new TcpBinding(new IPEndPoint(IPAddress.Parse(COLLECTOR_IP_ADDRESS), COLLECTOR_PORT), new MeterbusFrameSerializer());
             endpoint.PacketReceived += (sender, e) => resetEvent.Set();
 
-            await endpoint.ConnectAsync(new IPEndPoint(IPAddress.Parse(COLLECTOR_IP_ADDRESS), COLLECTOR_PORT));
+            await endpoint.ConnectAsync();
 
             await endpoint.SendAsync(new ShortFrame((byte)ControlMask.SND_NKE, 0x0a));
 
@@ -39,9 +39,9 @@ namespace Valley.Net.Protocols.MeterBus.Test
         [TestMethod]
         public async Task Meter_Should_Respond_When_Pinging_The_Meter()
         {
-            var binding = new TcpBinding(new MeterbusFrameSerializer());
+            var binding = new TcpBinding(new IPEndPoint(IPAddress.Parse(COLLECTOR_IP_ADDRESS), COLLECTOR_PORT), new MeterbusFrameSerializer());
 
-            var master = new MBusMaster(binding, new IPEndPoint(IPAddress.Parse(COLLECTOR_IP_ADDRESS), COLLECTOR_PORT));
+            var master = new MBusMaster(binding);
 
             var result = await master.Ping(0x0a, TimeSpan.FromSeconds(TIMEOUT_IN_SECONDS));
 
@@ -51,9 +51,9 @@ namespace Valley.Net.Protocols.MeterBus.Test
         [TestMethod]
         public async Task Meter_Scanner_Should_Find_Meter_When_Meter_Is_Connected_To_Collector()
         {
-            var binding = new TcpBinding(new MeterbusFrameSerializer());
+            var binding = new TcpBinding(new IPEndPoint(IPAddress.Parse(COLLECTOR_IP_ADDRESS), COLLECTOR_PORT), new MeterbusFrameSerializer());
 
-            var master = new MBusMaster(binding, new IPEndPoint(IPAddress.Parse(COLLECTOR_IP_ADDRESS), COLLECTOR_PORT));
+            var master = new MBusMaster(binding);
             master.Meter += (sender, e) => Debug.WriteLine($"Found meter on address {e.Address.ToString("x2")}.");
 
             await master.Scan(new byte[] { 0x0a }, TimeSpan.FromSeconds(100));
@@ -62,9 +62,9 @@ namespace Valley.Net.Protocols.MeterBus.Test
         [TestMethod]
         public async Task Meter_Should_Have_The_Address_Changed_When_Meter_Address_Is_Reconfigured()
         {
-            var binding = new TcpBinding(new MeterbusFrameSerializer());
+            var binding = new TcpBinding(new IPEndPoint(IPAddress.Parse(COLLECTOR_IP_ADDRESS), COLLECTOR_PORT), new MeterbusFrameSerializer());
 
-            var master = new MBusMaster(binding, new IPEndPoint(IPAddress.Parse(COLLECTOR_IP_ADDRESS), COLLECTOR_PORT));
+            var master = new MBusMaster(binding);
 
             await master.SetMeterAddress(0x0a, 0x09);
         }
@@ -72,9 +72,9 @@ namespace Valley.Net.Protocols.MeterBus.Test
         [TestMethod]
         public async Task Meter_Telemetry_Should_Be_Retrieved_When_Querying_The_Collector()
         {
-            var binding = new TcpBinding(new MeterbusFrameSerializer());
+            var binding = new TcpBinding(new IPEndPoint(IPAddress.Parse(COLLECTOR_IP_ADDRESS), COLLECTOR_PORT), new MeterbusFrameSerializer());
 
-            var master = new MBusMaster(binding, new IPEndPoint(IPAddress.Parse(COLLECTOR_IP_ADDRESS), COLLECTOR_PORT));
+            var master = new MBusMaster(binding);
 
             var response = await master.RequestData(0x0a, TimeSpan.FromSeconds(TIMEOUT_IN_SECONDS)) as VariableDataPacket;
 
