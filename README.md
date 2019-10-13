@@ -11,11 +11,11 @@ Other applications for the M-Bus such as alarm systems, flexible illumination in
 ## Retrieving meter telemetry
 
 ```
-var serialiser = new MBusFrameSerializer();
+var serialiser = new MeterbusFrameSerializer();
 var endpoint = new IPEndPoint(IPAddress.Parse("192.168.1.135"), 502);
 
 // binding to the collector/gateway
-var binding = new UdpBinding(endpoint, serializer); 
+var binding = new UdpBinding(endpoint, serializer);
 
 // reqeust for telemetry on meter with address 0x0a
 var response = await new MBusMaster(binding)
@@ -25,15 +25,15 @@ var response = await new MBusMaster(binding)
 ## Low level control
 
 ```
-var serialiser = new MBusFrameSerializer();
+var serialiser = new MeterbusFrameSerializer();
 var endpoint = new IPEndPoint(IPAddress.Parse("192.168.1.135"), 502);
 
 // binding to the collector/gateway
-var binding = new UdpBinding(endpoint, serialiser); 
-binding.Packet += (sender, e) => Debug.WriteLine("M-Bus packet received.");
+var binding = new UdpBinding(endpoint, serialiser);
+binding.PacketReceived += (sender, e) => Debug.WriteLine("M-Bus packet received.");
     
 // send a short frame/SND_NKE to the meter with address 0x0a
-await binding.Send(new ShortFrame((byte)ControlMask.SND_NKE, 0x0a));
+await binding.SendAsync(new ShortFrame((byte)ControlMask.SND_NKE, 0x0a));
 ```
 
 ## Deserialize M-Bus frame and payload
@@ -42,7 +42,7 @@ await binding.Send(new ShortFrame((byte)ControlMask.SND_NKE, 0x0a));
 var data = "68 35 35 68 08 0A 72 64 81 02 15 B4 09 05 07 1C 00 00 00 0C 78 05 49 78 16 03 74 03 00 00 01 FD 71 A7 06 6D 1A 2F 4A 51 27 1D 0C 13 42 01 00 00 0F 09 2E 37 24 12 17 07 18 3B 16"
     .HexToBytes();
 
-var frame = new MBusFrameSerializer()
+var frame = new MeterbusFrameSerializer()
   .Deserialize(data) as LongFrame;
 
 var packet = new MBusPacketSerialiser(frame)
