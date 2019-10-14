@@ -45,8 +45,7 @@ var data = "68 35 35 68 08 0A 72 64 81 02 15 B4 09 05 07 1C 00 00 00 0C 78 05 49
 var frame = new MeterbusFrameSerializer()
   .Deserialize(data) as LongFrame;
 
-var packet = new MeterbusPacketSerialiser(frame)
-  .Deserialize(frame.Payload);
+var packet = frame.AsPacket() as VariableDataPacket;
 ```
 
 ## Changelog
