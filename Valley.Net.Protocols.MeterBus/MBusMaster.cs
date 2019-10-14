@@ -143,14 +143,14 @@ namespace Valley.Net.Protocols.MeterBus
                 {
                     case FixedDataLongFrame frame:
                         {
-                            packet = frame.AsPacket();
+                            packet = frame.ToPacket();
 
                             resetEvent.Set();
                         }
                         break;
                     case VariableDataLongFrame frame:
                         {
-                            packet = frame.AsPacket();
+                            packet = frame.ToPacket();
 
                             resetEvent.Set();
                         }
@@ -193,14 +193,14 @@ namespace Valley.Net.Protocols.MeterBus
                 {
                     case FixedDataLongFrame frame:
                         {
-                            packet = frame.AsPacket();
+                            packet = frame.ToPacket();
 
                             resetEvent.Set();
                         }
                         break;
                     case VariableDataLongFrame frame:
                         {
-                            packet = frame.AsPacket();
+                            packet = frame.ToPacket();
 
                             resetEvent.Set();
                         }

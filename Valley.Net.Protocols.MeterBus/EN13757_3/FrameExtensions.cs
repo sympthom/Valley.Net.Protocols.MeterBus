@@ -11,14 +11,14 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_3
     /// <summary>
     /// Serializer implementing EN1434-3.
     /// </summary>
-    public static class MeterbusPacketSerializer
+    public static class FrameExtensions
     {
         /// <summary>
         /// Convert frame (physical and link layer) to packet (application layer).
         /// </summary>
         /// <param name="frame"></param>
         /// <returns></returns>
-        public static Packet AsPacket(this Frame frame)
+        public static Packet ToPacket(this Frame frame)
         {
             if (frame == null)
                 throw new ArgumentNullException(nameof(frame));
