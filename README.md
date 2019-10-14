@@ -41,7 +41,7 @@ await binding.SendAsync(new ShortFrame((byte)ControlMask.SND_NKE, 0x0a));
 ```
 var packet = "68 1F 1F 68 08 02 72 78 56 34 12 24 40 01 07 55 00 00 00 03 13 15 31 00 DA 02 3B 13 01 8B 60 04 37 18 02 18 16"
   .HexToBytes()
-  .ToFrame()   //EN13757_2
+  .ToFrame()   // EN13757_2
   .ToPacket(); // EN13757_3
 ```
 
