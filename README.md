@@ -18,7 +18,7 @@ var endpoint = new IPEndPoint(IPAddress.Parse("192.168.1.135"), 502);
 var binding = new UdpBinding(endpoint, serializer);
 
 // reqeust for telemetry on meter with address 0x0a
-var response = await new MBusMaster(binding)
+var response = await new MeterBusMaster(binding)
   .RequestData(0x0a, TimeSpan.FromSeconds(3));
 ```
 
@@ -45,14 +45,14 @@ var data = "68 35 35 68 08 0A 72 64 81 02 15 B4 09 05 07 1C 00 00 00 0C 78 05 49
 var frame = new MeterbusFrameSerializer()
   .Deserialize(data) as LongFrame;
 
-var packet = new MBusPacketSerialiser(frame)
+var packet = new MeterbusPacketSerialiser(frame)
   .Deserialize(frame.Payload);
 ```
 
 ## Changelog
 
 ### v1.0.2 (2019.10.13)
-* serial communication cabability
+* serial communication capability
 
 ### v1.0.1 (2019.10.12)
 * bug fixes
