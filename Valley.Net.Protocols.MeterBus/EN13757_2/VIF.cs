@@ -91,7 +91,7 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_2
             Magnitude = record.Magnitude(data);
             Name = record.Name(record.Magnitude(data));
             Quantity = record.Quantity;
-            VIF_string = record.VIF.ToString("X");
+            VIF_string = record.VIF.ToString("X2")+"h";
         }
 
 
