@@ -40,7 +40,7 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_2
 
         public string Quantity { get; set; }
 
-        public string VIF_string { get; set; }
+        public string VIF_string { get;  }
 
         public string Name { get; set; }
 
@@ -91,7 +91,9 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_2
             Magnitude = record.Magnitude(data);
             Name = record.Name(record.Magnitude(data));
             Quantity = record.Quantity;
+            VIF_string = record.VIF.ToString("X2")+"h";
         }
+
 
         public static readonly VifTableRecord[] VifFixedTable =
         {
@@ -325,10 +327,10 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_2
             new VifTableRecord ( 0x73, 86400.0, "s", "Averaging Duration", VariableDataQuantityUnit.AveragingDuration, VIF.VifType.PrimaryVIF, b => (b & 0x03), n => "Averaging Duration (days)"),  /* days    */
 
             /* E111 01nn     Actuality Duration s */
-            new VifTableRecord ( 0x74,     1.0, "s", "Averaging Duration", VariableDataQuantityUnit.AveragingDuration, VIF.VifType.PrimaryVIF, b => (b & 0x03), n => "Averaging Duration (seconds)"),  /* seconds */
-            new VifTableRecord ( 0x75,    60.0, "s", "Averaging Duration", VariableDataQuantityUnit.AveragingDuration, VIF.VifType.PrimaryVIF, b => (b & 0x03), n => "Averaging Duration (minutes)"),  /* minutes */
-            new VifTableRecord ( 0x76,  3600.0, "s", "Averaging Duration", VariableDataQuantityUnit.AveragingDuration, VIF.VifType.PrimaryVIF, b => (b & 0x03), n => "Averaging Duration (hours)"),  /* hours   */
-            new VifTableRecord ( 0x77, 86400.0, "s", "Averaging Duration", VariableDataQuantityUnit.AveragingDuration, VIF.VifType.PrimaryVIF, b => (b & 0x03), n => "Averaging Duration (days)"),  /* days    */
+            new VifTableRecord ( 0x74,     1.0, "s", "Actuality Duration", VariableDataQuantityUnit.AveragingDuration, VIF.VifType.PrimaryVIF, b => (b & 0x03), n => "Actuality Duration (seconds)"),  /* seconds */
+            new VifTableRecord ( 0x75,    60.0, "s", "Actuality Duration", VariableDataQuantityUnit.AveragingDuration, VIF.VifType.PrimaryVIF, b => (b & 0x03), n => "Actuality Duration (minutes)"),  /* minutes */
+            new VifTableRecord ( 0x76,  3600.0, "s", "Actuality Duration", VariableDataQuantityUnit.AveragingDuration, VIF.VifType.PrimaryVIF, b => (b & 0x03), n => "Actuality Duration (hours)"),  /* hours   */
+            new VifTableRecord ( 0x77, 86400.0, "s", "Actuality Duration", VariableDataQuantityUnit.AveragingDuration, VIF.VifType.PrimaryVIF, b => (b & 0x03), n => "Actuality Duration (days)"),  /* days    */
 
             /* Fabrication No */
             new VifTableRecord ( 0x78, 1.0, "", "Fabrication No", VariableDataQuantityUnit.FabricationNo, VIF.VifType.PrimaryVIF, b => 0, n => "Fabrication No"),
