@@ -1248,5 +1248,41 @@ namespace Valley.Net.Protocols.MeterBus.Test
 
             Assert.IsNotNull(packet);
         }
+
+        [TestMethod]
+        public void Test_VIF_ASCII_Meter()
+        {
+            var data = "68 56 56 68 08 5F 72 91 91 01 19 77 04 14 16 A0 00 00 00 0C 78 91 91 01 19 0D 7C 08 44 49 20 2E 74 73 75 63 0A 20 20 20 20 20 20 20 20 20 20 04 6D 00 0C 8A 26 02 7C 09 65 6D 69 74 20 2E 74 61 62 4A 14 04 14 0D 7A 05 00 04 94 7F 00 00 00 00 44 14 57 B0 04 00 0F 00 01 1F 22 16"
+                .HexToBytes();
+            var frame = new MeterbusFrameSerializer()
+                .Deserialize<VariableDataLongFrame>(data, 0, data.Length);
+
+            Assert.IsNotNull(frame);
+
+            var packet = frame.ToPacket() as VariableDataPacket;
+
+            foreach (var r in packet.Records)
+            {
+                var Dimension = r.Units[0].Unit;
+                var Description = r.Units[0].Units;
+                double Value;
+                try
+                {
+                    if (r.Units[0].Units == Valley.Net.Protocols.MeterBus.EN13757_2.VariableDataQuantityUnit.TimePoint)
+                        Value = System.Convert.ToDouble(r.Value);
+                    else
+                        Value = System.Convert.ToDouble(r.NormalizedValue.Item2);
+                }
+                catch (Exception ex)
+                {
+                    //Value = System.Convert.ToDouble(r.NormalizedValue.Item2);
+                }
+                var Type = r.Function;
+                var StoreageNumber = (long)r.StorageNumber;
+                var Tariff = (int)r.Tariff;
+            }
+
+            Assert.IsNotNull(packet);
+        }
     }
 }

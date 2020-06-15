@@ -114,9 +114,21 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_2
                                     }
                                 }
 
-                                var valueLength = dif.DataType == DataTypes._variable_length ? -1 : LenghtsInBitsTable[dif.DataType] / 8;
 
-                                var value = new Value(valueLength > 0 ? reader.ReadBytes(valueLength) : null);
+                                if (vif.Type == VIF.VifType.PlainTextVIF)
+                                    vif.Unit = BinaryReaderExtensions.ReadValue(reader).ToString();
+
+                                EN13757_2.Value value;
+                                if (dif.DataType == DataTypes._variable_length)
+                                {
+                                    value = new Value(new byte[0]);
+                                    value.LVARvalue = BinaryReaderExtensions.ReadValue(reader);
+                                }
+                                else
+                                {
+                                    var valueLength = dif.DataType == DataTypes._variable_length ? -1 : LenghtsInBitsTable[dif.DataType] / 8;
+                                    value = new Value(valueLength > 0 ? reader.ReadBytes(valueLength) : null);
+                                }
 
                                 Parts.Add(value);
                             }
