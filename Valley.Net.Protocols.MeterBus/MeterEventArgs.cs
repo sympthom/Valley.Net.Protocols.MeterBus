@@ -12,5 +12,11 @@ namespace Valley.Net.Protocols.MeterBus
         {
             Address = address;
         }
+
+        public MeterEventArgs()
+        {
+
+        }
+
     }
 }

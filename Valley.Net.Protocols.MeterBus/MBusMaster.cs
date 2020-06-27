@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq.Expressions;
 using System.Net;
 using System.Text;
 using System.Threading;
@@ -278,6 +279,139 @@ namespace Valley.Net.Protocols.MeterBus
                     if (!resetEvent.WaitOne(timeout))
                         throw new TimeoutException();
                 }
+            }
+            finally
+            {
+                await _binding.DisconnectAsync();
+            }
+        }
+
+        /// <summary>
+        /// Method for sending data to an MBus device.
+        /// </summary>
+        /// <param name="address">Primary Address for device that will receive the data that is sent.</param>
+        /// <param name="data">The data to be sent.</param>
+        /// <param name="timeout">Operation timeout.</param>
+        /// <returns></returns>
+        public async Task SendData(byte address, byte[] data, TimeSpan timeout)
+        {
+            var resetEvent = new AutoResetEvent(false);
+
+            var length = (byte)(data.Length);
+
+            _binding.PacketReceived += (sender, e) =>
+            {
+                switch (e.Packet)
+                {
+                    case AckFrame frame:
+                        {
+                            resetEvent.Set();
+
+                            Meter?.Invoke(this, new MeterEventArgs());
+                        }
+                        break;
+                    case LongFrame frame:
+                        {
+                            resetEvent.Set();
+
+                            Meter?.Invoke(this, new MeterEventArgs(frame.Address));
+                        }
+                        break;
+                }
+            };
+
+
+            try
+            {
+                await _binding.ConnectAsync();
+
+                await _binding.SendAsync(new LongFrame((byte)ControlMask.SND_UD, (byte)ControlInformation.DATA_SEND, address, data, length));
+
+                if (!resetEvent.WaitOne(timeout))
+                    throw new TimeoutException();
+
+            }
+            finally
+            {
+                await _binding.DisconnectAsync();
+            }
+        }
+
+        /// <summary>
+        /// Method for MBus device selection when performing communication using devices Secondary Address (Manufacturer Id).
+        /// </summary>
+        /// <param name="address">Primary Address for selecting device to perform Secondary Address operation upon. Should be 0xfd (253) for proper operation.</param>
+        /// <param name="data">Secondary Address (Identification No + Manufacturer Id + Device Id) for device selection. All fields are represented as hex-string. 
+        /// When searching for a device with a known Identification No, use Manufacturer Id = 0xFFFF, Version = 0xFF and Device Id = 0xFF.
+        /// 
+        /// Secondary address is supposed to be stated in Little-Endian byte order for each part.</param>
+        /// 
+        /// Eg when selecting 94231245 0444 01 02 data have to be encoded like [ 0x45 0x12 0x23 0x94 0x44 0x04 0x01 0x02 ].
+        /// <param name="endian">Set to true to use Big-Endian byte order and let the method perform an internal re-ordering of bytes in data.</param>
+        /// <param name="timeout">Operation timeout.</param>
+        /// <returns></returns>
+        public async Task SelectSlave(byte address, byte[] data, bool endian, TimeSpan timeout)
+        {
+            var resetEvent = new AutoResetEvent(false);
+
+            if (data.Length < 4)
+            {
+                //left pad 0x00 up til 4 bytes
+            }
+
+            if (data.Length > 4 && data.Length < 8)
+            {
+                // right pad 0xFF up til 8 bytes
+
+            }
+
+            var length = (byte)(data.Length);
+
+            if (endian)
+            {
+                byte[] _data = new byte[length];
+                _data[0] = data[3];
+                _data[1] = data[2];
+                _data[2] = data[1];
+                _data[3] = data[0];
+                _data[4] = data[5];
+                _data[5] = data[4];
+                _data[6] = data[6];
+                _data[7] = data[7];
+
+                data = _data;
+            }
+
+            _binding.PacketReceived += (sender, e) =>
+            {
+                switch (e.Packet)
+                {
+                    case AckFrame frame:
+                        {
+                            resetEvent.Set();
+
+                            Meter?.Invoke(this, (MeterEventArgs)new EventArgs());
+                        }
+                        break;
+                    case LongFrame frame:
+                        {
+                            resetEvent.Set();
+
+                            Meter?.Invoke(this, new MeterEventArgs(frame.Address));
+                        }
+                        break;
+                }
+            };
+
+            try
+            {
+                await _binding.ConnectAsync();
+
+                await _binding.SendAsync(new LongFrame((byte)ControlMask.SND_UD, (byte)ControlInformation.SELECT_SLAVE, address, data, length));
+
+                if (!resetEvent.WaitOne(timeout))
+                    throw new TimeoutException();
+
             }
             finally
             {
