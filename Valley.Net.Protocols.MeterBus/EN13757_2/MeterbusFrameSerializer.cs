@@ -214,14 +214,16 @@ namespace Valley.Net.Protocols.MeterBus
 
         private static int Serialize(ControlFrame frame, BinaryWriter writer)
         {
-            writer.Write(frame.Start);
-            writer.Write(frame.Length);
-            writer.Write(frame.Length);
-            writer.Write(frame.Start);
-            writer.Write(frame.Crc);
-            writer.Write(frame.Stop);
-
-            return 6;
+          writer.Write(frame.Start);
+          writer.Write((byte)0x03);
+          writer.Write((byte)0x03);
+          writer.Write(frame.Start);
+          writer.Write((byte)frame.Control);
+          writer.Write(frame.Address);
+          writer.Write((byte)frame.ControlInformation);
+          writer.Write(frame.Crc);
+          writer.Write(frame.Stop);
+          return 9;
         }
     }
 }
