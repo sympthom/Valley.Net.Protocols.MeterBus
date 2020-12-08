@@ -71,7 +71,7 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_3
                             (u.Units != VariableDataQuantityUnit.MultiplicativeCorrectionFactor1000) &&
                             (u.Units != VariableDataQuantityUnit.AdditiveCorrectionConstant) &&
                             true)
-                        .Select(u => u.VIF_string == null ? string.Empty : $"{u.VIF_string}." + u.Units.ToString())), Function, Tariff, SubUnit);
+                        .Select(u => (u.VIF_string == null ? string.Empty : $"{u.VIF_string}.") + u.Units.ToString())), Function, Tariff, SubUnit);
 
             public Tuple<string, object> NormalizedValue
             {
