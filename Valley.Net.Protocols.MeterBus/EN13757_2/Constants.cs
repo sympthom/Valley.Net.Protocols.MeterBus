@@ -1,6 +1,4 @@
-﻿using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace Valley.Net.Protocols.MeterBus.EN13757_2
 {
@@ -207,5 +205,45 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_2
         public const byte MBUS_VARIABLE_DATA_MEDIUM_DUAL_WATER = 0x17;
         public const byte MBUS_VARIABLE_DATA_MEDIUM_PRESSURE = 0x18;
         public const byte MBUS_VARIABLE_DATA_MEDIUM_ADC = 0x19;
+
+        //
+        // VIF/VIFE extension bit mask
+        //
+        public const byte MBUS_VIF_EXTENSION_BIT = 0x80;
+
+        //
+        // Maximum number of VIF/DIF extensions before error
+        //
+        public const int MBUS_MAX_EXTENSIONS = 10;
+
+        //
+        // MBusMaster magic numbers
+        //
+        public const byte MBUS_REQUEST_DATA_CODE = 0x7B;
+        public const byte MBUS_SET_ADDRESS_DIF = 0x01;
+        public const byte MBUS_SET_ADDRESS_VIF = 0x7A;
+
+        //
+        // Data type lengths in bits
+        //
+        public static readonly Dictionary<DataTypes, int> LengthsInBitsTable = new Dictionary<DataTypes, int>()
+        {
+            { DataTypes._No_data, 0 },
+            { DataTypes._8_Bit_Integer, 8 },
+            { DataTypes._16_Bit_Integer, 16 },
+            { DataTypes._24_Bit_Integer, 24 },
+            { DataTypes._32_Bit_Integer, 32 },
+            { DataTypes._32_Bit_Real, 32 },
+            { DataTypes._48_Bit_Integer, 48 },
+            { DataTypes._64_Bit_Integer, 64 },
+            { DataTypes._Selection_for_Readout, 0 },
+            { DataTypes._2_digit_BCD, 8 },
+            { DataTypes._4_digit_BCD, 16 },
+            { DataTypes._6_digit_BCD, 24 },
+            { DataTypes._8_digit_BCD, 32 },
+            { DataTypes._variable_length, 0 /*N*/ },
+            { DataTypes._12_digit_BCD, 48 },
+            { DataTypes._Unknown, 64 },
+        };
     }
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -44,18 +44,12 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_2
                 if (countersBCD)
                 {
                     var buf8 = new byte[4];
-
-                    if (reader.Read(buf8, 0, buf8.Length) != buf8.Length)
-                        throw new InvalidDataException();
-
-                    Counter1 = UInt32.Parse(buf8.BCDToString());
+                    var read1 = reader.Read(buf8, 0, buf8.Length);
+                    Counter1 = read1 > 0 ? ParseBcdOrBinary(buf8) : 0;
 
                     var buf12 = new byte[4];
-
-                    if (reader.Read(buf12, 0, buf12.Length) != buf12.Length)
-                        throw new InvalidDataException();
-
-                    Counter2 = UInt32.Parse(buf12.BCDToString());
+                    var read2 = reader.Read(buf12, 0, buf12.Length);
+                    Counter2 = read2 > 0 ? ParseBcdOrBinary(buf12) : 0;
                 }
                 else
                 {
@@ -63,6 +57,14 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_2
                     Counter2 = reader.ReadUInt32();
                 }
             }
+        }
+
+        private static uint ParseBcdOrBinary(byte[] data)
+        {
+            var bcdStr = data.BCDToString();
+            if (uint.TryParse(bcdStr, out var result))
+                return result;
+            return BitConverter.ToUInt32(data, 0);
         }
     }
 }

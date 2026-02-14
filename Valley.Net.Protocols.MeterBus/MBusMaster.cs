@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq.Expressions;
-using System.Net;
-using System.Text;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Valley.Net.Bindings;
@@ -16,7 +11,7 @@ namespace Valley.Net.Protocols.MeterBus
     {
         private readonly IEndPointBinding _binding;
 
-        public event EventHandler<MeterEventArgs> Meter;
+        public event EventHandler<MeterEventArgs>? Meter;
 
         public MBusMaster(IEndPointBinding binding)
         {
@@ -33,7 +28,7 @@ namespace Valley.Net.Protocols.MeterBus
         {
             var resetEvent = new AutoResetEvent(false);
 
-            _binding.PacketReceived += (sender, e) =>
+            EventHandler<Valley.Net.Bindings.PacketEventArgs> handler = (sender, e) =>
             {
                 switch (e.Packet)
                 {
@@ -45,6 +40,8 @@ namespace Valley.Net.Protocols.MeterBus
                 }
             };
 
+            _binding.PacketReceived += handler;
+
             try
             {
                 await _binding.ConnectAsync();
@@ -55,6 +52,7 @@ namespace Valley.Net.Protocols.MeterBus
             }
             finally
             {
+                _binding.PacketReceived -= handler;
                 await _binding.DisconnectAsync();
             }
         }
@@ -64,8 +62,8 @@ namespace Valley.Net.Protocols.MeterBus
             var length = (byte)0x03;
 
             var data = new byte[length];
-            data[0] = 0x01;
-            data[1] = 0x7a;
+            data[0] = Constants.MBUS_SET_ADDRESS_DIF;
+            data[1] = Constants.MBUS_SET_ADDRESS_VIF;
             data[2] = newaddress;
 
             try
@@ -79,14 +77,6 @@ namespace Valley.Net.Protocols.MeterBus
                 await _binding.DisconnectAsync();
             }
         }
-
-        //public async Task SetBaudRate(byte address, byte bauderate)
-        //{
-        //    var payload = new byte[1];
-        //    payload[0] = bauderate;
-
-        //    await _endpoint.Send(new LongMeterBusPackage(ControlCommand.SND_UD, address, payload));
-        //}
 
         public async Task SetId(byte address)
         {
@@ -134,46 +124,7 @@ namespace Valley.Net.Protocols.MeterBus
         /// <returns></returns>
         public async Task<Packet> RequestAlarm(byte address, TimeSpan timeout)
         {
-            var resetEvent = new AutoResetEvent(false);
-
-            Packet packet = null;
-
-            _binding.PacketReceived += (sender, e) =>
-            {
-                switch (e.Packet)
-                {
-                    case FixedDataLongFrame frame:
-                        {
-                            packet = frame.ToPacket();
-
-                            resetEvent.Set();
-                        }
-                        break;
-                    case VariableDataLongFrame frame:
-                        {
-                            packet = frame.ToPacket();
-
-                            resetEvent.Set();
-                        }
-                        break;
-                }
-            };
-
-            try
-            {
-                await _binding.ConnectAsync();
-
-                await _binding.SendAsync(new ShortFrame((byte)ControlMask.REQ_UD1, address));
-
-                if (!resetEvent.WaitOne(timeout))
-                    throw new TimeoutException();
-            }
-            finally
-            {
-                await _binding.DisconnectAsync();
-            }
-
-            return packet;
+            return await RequestDataInternal(address, timeout, ControlMask.REQ_UD1);
         }
 
         /// <summary>
@@ -184,11 +135,16 @@ namespace Valley.Net.Protocols.MeterBus
         /// <returns></returns>
         public async Task<Packet> RequestData(byte address, TimeSpan timeout)
         {
+            return await RequestDataInternal(address, timeout, ControlMask.REQ_UD2);
+        }
+
+        private async Task<Packet> RequestDataInternal(byte address, TimeSpan timeout, ControlMask controlMask)
+        {
             var resetEvent = new AutoResetEvent(false);
 
-            Packet packet = null;
+            Packet? packet = null;
 
-            _binding.PacketReceived += (sender, e) =>
+            EventHandler<Valley.Net.Bindings.PacketEventArgs> handler = (sender, e) =>
             {
                 switch (e.Packet)
                 {
@@ -209,21 +165,24 @@ namespace Valley.Net.Protocols.MeterBus
                 }
             };
 
+            _binding.PacketReceived += handler;
+
             try
             {
                 await _binding.ConnectAsync();
 
-                await _binding.SendAsync(new ShortFrame((byte)ControlMask.REQ_UD2, address)); // request data
+                await _binding.SendAsync(new ShortFrame((byte)controlMask, address));
 
                 if (!resetEvent.WaitOne(timeout))
                     throw new TimeoutException();
             }
             finally
             {
+                _binding.PacketReceived -= handler;
                 await _binding.DisconnectAsync();
             }
 
-            return packet;
+            return packet!;
         }
 
         public async Task Initialize(byte address)
@@ -244,7 +203,7 @@ namespace Valley.Net.Protocols.MeterBus
         {
             var resetEvent = new AutoResetEvent(false);
 
-            _binding.PacketReceived += (sender, e) =>
+            EventHandler<Valley.Net.Bindings.PacketEventArgs> handler = (sender, e) =>
             {
                 switch (e.Packet)
                 {
@@ -263,6 +222,8 @@ namespace Valley.Net.Protocols.MeterBus
                 }
             };
 
+            _binding.PacketReceived += handler;
+
             try
             {
                 await _binding.ConnectAsync();
@@ -274,7 +235,7 @@ namespace Valley.Net.Protocols.MeterBus
                     if (!resetEvent.WaitOne(timeout))
                         continue;
 
-                    await _binding.SendAsync(new ShortFrame(0x7b, address)); //request data.
+                    await _binding.SendAsync(new ShortFrame((byte)ControlMask.REQ_UD2, address)); //request data.
 
                     if (!resetEvent.WaitOne(timeout))
                         throw new TimeoutException();
@@ -282,6 +243,7 @@ namespace Valley.Net.Protocols.MeterBus
             }
             finally
             {
+                _binding.PacketReceived -= handler;
                 await _binding.DisconnectAsync();
             }
         }
@@ -299,7 +261,7 @@ namespace Valley.Net.Protocols.MeterBus
 
             var length = (byte)(data.Length);
 
-            _binding.PacketReceived += (sender, e) =>
+            EventHandler<Valley.Net.Bindings.PacketEventArgs> handler = (sender, e) =>
             {
                 switch (e.Packet)
                 {
@@ -320,6 +282,7 @@ namespace Valley.Net.Protocols.MeterBus
                 }
             };
 
+            _binding.PacketReceived += handler;
 
             try
             {
@@ -329,10 +292,10 @@ namespace Valley.Net.Protocols.MeterBus
 
                 if (!resetEvent.WaitOne(timeout))
                     throw new TimeoutException();
-
             }
             finally
             {
+                _binding.PacketReceived -= handler;
                 await _binding.DisconnectAsync();
             }
         }
@@ -356,33 +319,38 @@ namespace Valley.Net.Protocols.MeterBus
 
             if (data.Length < 4)
             {
-                //left pad 0x00 up til 4 bytes
+                var padded = new byte[4];
+                Array.Copy(data, 0, padded, 4 - data.Length, data.Length);
+                data = padded;
             }
 
             if (data.Length > 4 && data.Length < 8)
             {
-                // right pad 0xFF up til 8 bytes
-
+                var padded = new byte[8];
+                Array.Copy(data, 0, padded, 0, data.Length);
+                for (int i = data.Length; i < 8; i++)
+                    padded[i] = 0xFF;
+                data = padded;
             }
 
             var length = (byte)(data.Length);
 
             if (endian)
             {
-                byte[] _data = new byte[length];
-                _data[0] = data[3];
-                _data[1] = data[2];
-                _data[2] = data[1];
-                _data[3] = data[0];
-                _data[4] = data[5];
-                _data[5] = data[4];
-                _data[6] = data[6];
-                _data[7] = data[7];
+                byte[] reordered = new byte[length];
+                reordered[0] = data[3];
+                reordered[1] = data[2];
+                reordered[2] = data[1];
+                reordered[3] = data[0];
+                reordered[4] = data[5];
+                reordered[5] = data[4];
+                reordered[6] = data[6];
+                reordered[7] = data[7];
 
-                data = _data;
+                data = reordered;
             }
 
-            _binding.PacketReceived += (sender, e) =>
+            EventHandler<Valley.Net.Bindings.PacketEventArgs> handler = (sender, e) =>
             {
                 switch (e.Packet)
                 {
@@ -390,7 +358,7 @@ namespace Valley.Net.Protocols.MeterBus
                         {
                             resetEvent.Set();
 
-                            Meter?.Invoke(this, (MeterEventArgs)new EventArgs());
+                            Meter?.Invoke(this, new MeterEventArgs());
                         }
                         break;
                     case LongFrame frame:
@@ -403,6 +371,8 @@ namespace Valley.Net.Protocols.MeterBus
                 }
             };
 
+            _binding.PacketReceived += handler;
+
             try
             {
                 await _binding.ConnectAsync();
@@ -411,10 +381,10 @@ namespace Valley.Net.Protocols.MeterBus
 
                 if (!resetEvent.WaitOne(timeout))
                     throw new TimeoutException();
-
             }
             finally
             {
+                _binding.PacketReceived -= handler;
                 await _binding.DisconnectAsync();
             }
         }

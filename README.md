@@ -1,58 +1,129 @@
-![record screenshot](MBusLogo240.jpg)
+![M-Bus Logo](MBusLogo240.svg)
 
-M-Bus (Meter Bus) project for communicating and parsing M-Bus over udp, tcp and serial. Implementation of protocol EN 13757-2 and EN 13757-3 (https://ec.europa.eu/eip/ageing/standards/ict-and-communication/data/en-13757_en). 
+# Valley.Net.Protocols.MeterBus
 
-M-Bus (Meter-Bus) is a European standard (EN 13757-2 physical and link layer, EN 13757-3 application layer) for the remote reading of gas, water or electricity meters. M-Bus is also usable for other types of consumption meters. The M-Bus interface is made for communication on two wires, making it cost-effective. A radio variant of M-Bus (Wireless M-Bus) is also specified in EN 13757-4.
+[![Build & Test](https://github.com/valleynet/Valley.Net.Protocols.MeterBus/actions/workflows/build.yml/badge.svg)](https://github.com/valleynet/Valley.Net.Protocols.MeterBus/actions/workflows/build.yml)
 
-The M-Bus was developed to fill the need for a system for the networking and remote reading of utility meters, for example to measure the consumption of gas or water in the home. This bus fulfills the special requirements of remotely powered or battery-driven systems, including consumer utility meters. When interrogated, the meters deliver the data they have collected to a common master, such as a hand-held computer, connected at periodic intervals to read all utility meters of a building. An alternative method of collecting data centrally is to transmit meter readings via a modem.
+A .NET 10 library for M-Bus (Meter Bus) communication and frame parsing over UDP, TCP, and serial. Implements the EN 13757-2 (physical and link layer) and EN 13757-3 (application layer) standards.
 
-Other applications for the M-Bus such as alarm systems, flexible illumination installations, heating control, etc. are suitable.
+## What is M-Bus?
 
-## Retrieving meter telemetry
+M-Bus (Meter-Bus) is a European standard for the remote reading of utility meters such as gas, water, and electricity. It is designed for cost-effective two-wire communication and supports both wired (EN 13757-2/3) and wireless (EN 13757-4) variants.
+
+Typical use cases include:
+
+- Remote reading of utility meters in residential and commercial buildings
+- Centralized data collection via gateways or hand-held readers
+- Alarm systems, heating control, and building automation
+
+## Architecture
+
+The library is organized into two protocol layers mirroring the EN 13757 specification:
 
 ```
-var serialiser = new MeterbusFrameSerializer();
+┌──────────────────────────────────────────────────┐
+│              Application Layer (EN13757_3)        │
+│  Packet, VariableDataPacket, FixedDataPacket,    │
+│  AlarmStatusPacket, ApplicationErrorPacket        │
+├──────────────────────────────────────────────────┤
+│         Physical / Link Layer (EN13757_2)         │
+│  Frame, ShortFrame, LongFrame, ControlFrame,     │
+│  VariableDataLongFrame, FixedDataLongFrame,      │
+│  DIF, DIFE, VIF, VIFE, VIFE_FB, VIFE_FD         │
+├──────────────────────────────────────────────────┤
+│              Transport Bindings                   │
+│       UDP, TCP, Serial (via Valley.Net.Bindings) │
+└──────────────────────────────────────────────────┘
+```
+
+## Prerequisites
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) or later
+
+## Installation
+
+```bash
+dotnet add package Valley.Net.Protocols.MeterBus
+```
+
+## Usage
+
+### Retrieving meter telemetry
+
+```csharp
+var serializer = new MeterbusFrameSerializer();
 var endpoint = new IPEndPoint(IPAddress.Parse("192.168.1.135"), 502);
 
-// binding to the collector/gateway
+// Bind to the collector/gateway
 var binding = new UdpBinding(endpoint, serializer);
 
-// reqeust for telemetry on meter with address 0x0a
-var response = await new MeterBusMaster(binding)
-  .RequestData(0x0a, TimeSpan.FromSeconds(3));
+// Request telemetry from meter at address 0x0a
+var response = await new MBusMaster(binding)
+    .RequestData(0x0a, TimeSpan.FromSeconds(3));
 ```
 
-## Low level control
+### Low-level control
 
-```
-var serialiser = new MeterbusFrameSerializer();
+```csharp
+var serializer = new MeterbusFrameSerializer();
 var endpoint = new IPEndPoint(IPAddress.Parse("192.168.1.135"), 502);
 
-// binding to the collector/gateway
-var binding = new UdpBinding(endpoint, serialiser);
+// Bind to the collector/gateway
+var binding = new UdpBinding(endpoint, serializer);
 binding.PacketReceived += (sender, e) => Debug.WriteLine("M-Bus packet received.");
-    
-// send a short frame/SND_NKE to the meter with address 0x0a
+
+// Send a short frame / SND_NKE to the meter at address 0x0a
 await binding.SendAsync(new ShortFrame((byte)ControlMask.SND_NKE, 0x0a));
 ```
 
-## Deserialize M-Bus frame and payload
+### Deserialize an M-Bus frame and payload
 
-```
+```csharp
 var packet = "68 1F 1F 68 08 02 72 78 56 34 12 24 40 01 07 55 00 00 00 03 13 15 31 00 DA 02 3B 13 01 8B 60 04 37 18 02 18 16"
-  .HexToBytes()
-  .ToFrame()   // EN13757_2
-  .ToPacket(); // EN13757_3
+    .HexToBytes()
+    .ToFrame()   // EN 13757-2: physical/link layer
+    .ToPacket(); // EN 13757-3: application layer
+```
+
+## Building from source
+
+```bash
+dotnet restore Valley.Net.Protocols.MeterBus.sln
+dotnet build Valley.Net.Protocols.MeterBus.sln --configuration Release
+dotnet test Valley.Net.Protocols.MeterBus.sln --configuration Release
 ```
 
 ## Changelog
 
+### v2.0.0
+
+- Upgraded to .NET 10 (from .NET Standard 2.0 / .NET Framework 4.6.1)
+- Added GitHub Actions CI/CD workflows (build, test, NuGet publish)
+- Fixed critical bug in `SelectSlave` (InvalidCastException at runtime)
+- Fixed event handler memory leak in `MBusMaster`
+- Implemented `SelectSlave` secondary address padding logic
+- Removed ~800 lines of dead/commented-out code
+- Extracted `IValueInformationField` interface for VIF/VIFE types
+- Cached VIF/VIFE dictionary lookups for improved performance
+- Extracted `MBusMaster` communication pattern into reusable helper
+- Refactored VIFE if/else chain to table-driven approach
+- Extracted value parsing into dedicated `ValueParser` class
+- Consolidated magic numbers into `Constants.cs`
+- Consolidated duplicate `LengthsInBitsTable`
+- General code cleanup and modernization
+
 ### v1.0.2 (2019.10.13)
-* serial communication capability
+
+- Serial communication capability
 
 ### v1.0.1 (2019.10.12)
-* bug fixes
+
+- Bug fixes
 
 ### v1.0.0 (2018.09.29)
-* initial release
 
+- Initial release
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.

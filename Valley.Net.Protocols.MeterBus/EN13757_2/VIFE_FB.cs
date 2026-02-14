@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -6,7 +6,7 @@ using System.Text;
 
 namespace Valley.Net.Protocols.MeterBus.EN13757_2
 {
-    public sealed class VIFE_FB : Part
+    public sealed class VIFE_FB : Part, IValueInformationField
     {
         public bool Extension { get; }
 
@@ -44,9 +44,7 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_2
 
         public VIFE_FB(byte b)
         {
-            var record = VIFE_FB
-                .VifeFbTable
-                .ToDictionary(x => x.VIFFB)[(byte)(b & (byte)VariableDataRecordType.MBUS_DIB_VIF_WITHOUT_EXTENSION)]; // clear Extension bit
+            var record = VifeFbLookup[(byte)(b & (byte)VariableDataRecordType.MBUS_DIB_VIF_WITHOUT_EXTENSION)]; // clear Extension bit
 
             Data = b;
             Extension = (b & 0x80) != 0;
@@ -188,5 +186,8 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_2
             new VifeFbTableRecord(0x7e, VariableDataQuantityUnit.CumulCountMaxPower_W, b => (b & 0x07) - 3),
             new VifeFbTableRecord(0x7f, VariableDataQuantityUnit.CumulCountMaxPower_W, b => (b & 0x07) - 3),
         };
+
+        private static readonly Dictionary<byte, VifeFbTableRecord> VifeFbLookup =
+            VifeFbTable.ToDictionary(x => x.VIFFB);
     }
 }

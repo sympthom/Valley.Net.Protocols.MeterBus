@@ -1,9 +1,8 @@
-﻿using Valley.Net.Protocols.MeterBus.EN13757_2;
+using Valley.Net.Protocols.MeterBus.EN13757_2;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 
 namespace Valley.Net.Protocols.MeterBus.EN13757_3
 {
@@ -57,7 +56,7 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_3
             public UnitData[] Units { get; set; }
 
             public int Magnitude => Units
-                        .Where(u => (u.Units != VariableDataQuantityUnit.AdditiveCorrectionConstant) && true)
+                        .Where(u => u.Units != VariableDataQuantityUnit.AdditiveCorrectionConstant)
                         .Sum(u => u.Magnitude);
 
             public int Offset => Units
@@ -69,8 +68,7 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_3
                         .Where(u =>
                             (u.Units != VariableDataQuantityUnit.MultiplicativeCorrectionFactor) &&
                             (u.Units != VariableDataQuantityUnit.MultiplicativeCorrectionFactor1000) &&
-                            (u.Units != VariableDataQuantityUnit.AdditiveCorrectionConstant) &&
-                            true)
+                            (u.Units != VariableDataQuantityUnit.AdditiveCorrectionConstant))
                         .Select(u => u.VIF_string == null ? string.Empty : $"{u.VIF_string}." + u.Units.ToString())), Function, Tariff, SubUnit);
 
             public Tuple<string, object> NormalizedValue
@@ -130,75 +128,7 @@ namespace Valley.Net.Protocols.MeterBus.EN13757_3
                             }
                         case VariableDataQuantityUnit.TimePoint:
                             {
-                                DateTime dateTime;
-
-                                switch (ValueDataType)
-                                {
-                                    case DataTypes._16_Bit_Integer: // Type G: Compound CP16: Date
-                                        {
-                                            var temp = ValueData;
-                                            var day = temp[0] & 0x1f;
-                                            var month = (temp[1] & 0x0f);
-                                            var year = 100 + (((temp[0] & 0xe0) >> 5) | ((temp[1] & 0xf0) >> 1));
-
-                                            if (year < 70)
-                                                year += 2000;
-                                            else
-                                                year += 1900;
-
-                                            if (month == 0 || day == 0)
-                                                dateTime = DateTime.MinValue;
-                                            else
-                                                dateTime = new DateTime(year, month, day);
-                                        }
-                                        break;
-                                    case DataTypes._32_Bit_Integer: //data type G (date) 4 bytes (32 bit)
-                                        {
-                                            var temp = ValueData;
-                                            var minute = temp[0] & 0x3f;
-                                            var hour = temp[1] & 0x1f;
-                                            var day = temp[2] & 0x1f;
-                                            var month = (temp[3] & 0x0f);
-                                            var year = 100 + (((temp[2] & 0xe0) >> 5) | ((temp[3] & 0xf0) >> 1));
-
-                                            if (year < 70)
-                                                year += 2000;
-                                            else
-                                                year += 1900;
-
-                                            if (month == 0 || day == 0)
-                                                dateTime = DateTime.MinValue;
-                                            else
-                                                dateTime = new DateTime(year, month, day, hour, minute, 0);
-                                        }
-                                        break;
-                                    case DataTypes._48_Bit_Integer: //data type F (time & date) 6 bytes (48 bit)
-                                        {
-                                            var temp = ValueData;
-                                            var second = temp[0] & 0x3f;
-                                            var minute = temp[1] & 0x3f;
-                                            var hour = temp[2] & 0x1f;
-                                            var day = temp[3] & 0x1f;
-                                            var month = (temp[4] & 0x0f);
-                                            var year = 100 + (((temp[3] & 0xe0) >> 5) | ((temp[4] & 0xf0) >> 1));  //(((temp >> 25) & 0x38) | ((temp >> 21) & 0x07));
-
-                                            if (year < 70)
-                                                year += 2000;
-                                            else
-                                                year += 1900;
-
-                                            var valid = (temp[1] & 0x80) == 0;
-                                            var summer = (temp[1] & 0x8000) == 0;
-
-                                            if (month == 0 || day == 0)
-                                                dateTime = DateTime.MinValue;
-                                            else
-                                                dateTime = new DateTime(year, month, day, hour, minute, second);
-                                        }
-                                        break;
-                                    default:
-                                        throw new InvalidDataException();
-                                }
+                                var dateTime = ValueParser.ParseDateTime(ValueDataType, ValueData);
 
                                 return new Tuple<string, object>(Name, dateTime);
                             }

@@ -1,45 +1,40 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
 using System.IO.Ports;
-using System.Net;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Valley.Net.Bindings.Serial;
 using Valley.Net.Protocols.MeterBus.EN13757_2;
-using Valley.Net.Protocols.MeterBus.EN13757_3;
 
-namespace Valley.Net.Protocols.MeterBus.Test
+namespace Valley.Net.Protocols.MeterBus.Test;
+
+/// <summary>
+/// Integration tests requiring a real M-Bus serial connection.
+/// These tests are excluded from CI runs.
+/// </summary>
+[TestClass]
+[TestCategory("Integration")]
+public sealed class SerialTests
 {
-    [TestClass]
-    public sealed class SerialTests
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(3);
+
+    [TestMethod]
+    public async Task Meter_Should_Respond_With_Ack_When_Sending_SND_NKE()
     {
-        private const int TIMEOUT_IN_SECONDS = 3;
+        var resetEvent = new AutoResetEvent(false);
 
-        [TestMethod]
-        public async Task Meter_Should_Respond_With_Ack_When_Sending_SND_NKE()
+        var port = new SerialPort
         {
-            var resetEvent = new AutoResetEvent(false);
+            BaudRate = 1200
+        };
 
-            var port = new SerialPort();
-            port.BaudRate = 1200;
+        var endpoint = new SerialBinding(port, (x, y) => null!, new MeterbusFrameSerializer());
 
-            var endpoint = new SerialBinding(port, (x, y) =>
-            {
-                return null;
-            }, new MeterbusFrameSerializer());
+        endpoint.PacketReceived += (sender, e) => resetEvent.Set();
 
-            endpoint.PacketReceived += (sender, e) => resetEvent.Set();
+        await endpoint.ConnectAsync();
 
-            await endpoint.ConnectAsync();
+        await endpoint.SendAsync(new ShortFrame((byte)ControlMask.SND_NKE, 0x0a));
 
-            await endpoint.SendAsync(new ShortFrame((byte)ControlMask.SND_NKE, 0x0a));
+        Assert.IsTrue(resetEvent.WaitOne(Timeout));
 
-            Assert.IsTrue(resetEvent.WaitOne(TimeSpan.FromSeconds(TIMEOUT_IN_SECONDS)));
-
-            await endpoint.DisconnectAsync();
-        }
+        await endpoint.DisconnectAsync();
     }
 }
