@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Authors>Martin Dahlstedt</Authors>
+    <Company>Valley</Company>
+    <Version>3.0.0</Version>
+    <Description>Abstractions and contracts for the Valley M-Bus protocol library (EN 13757)</Description>
+  </PropertyGroup>
+
+</Project>

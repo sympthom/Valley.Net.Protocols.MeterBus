@@ -23,11 +23,16 @@ jobs:
       - name: Build
         run: dotnet build Valley.Net.Protocols.MeterBus.sln --configuration Release --no-restore
 
-      - name: Test
-        run: dotnet test Valley.Net.Protocols.MeterBus.sln --configuration Release --no-build
+      - name: Unit Tests
+        run: dotnet test --project tests/Valley.Net.Protocols.MeterBus.Tests/Valley.Net.Protocols.MeterBus.Tests.csproj --configuration Release --no-build
 
       - name: Pack
-        run: dotnet pack Valley.Net.Protocols.MeterBus/Valley.Net.Protocols.MeterBus.csproj --configuration Release --no-build --output ./nupkg
+        run: |
+          dotnet pack src/Valley.Net.Protocols.MeterBus.Abstractions/Valley.Net.Protocols.MeterBus.Abstractions.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack src/Valley.Net.Protocols.MeterBus/Valley.Net.Protocols.MeterBus.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack src/Valley.Net.Protocols.MeterBus.Transport.Tcp/Valley.Net.Protocols.MeterBus.Transport.Tcp.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack src/Valley.Net.Protocols.MeterBus.Transport.Udp/Valley.Net.Protocols.MeterBus.Transport.Udp.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack src/Valley.Net.Protocols.MeterBus.Transport.Serial/Valley.Net.Protocols.MeterBus.Transport.Serial.csproj --configuration Release --no-build --output ./nupkg
 
       - name: Push to NuGet
         run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

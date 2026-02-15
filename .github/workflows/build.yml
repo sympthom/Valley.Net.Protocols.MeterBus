@@ -24,8 +24,8 @@ jobs:
       - name: Build
         run: dotnet build Valley.Net.Protocols.MeterBus.sln --configuration Release --no-restore
 
-      - name: Test
-        run: dotnet test Valley.Net.Protocols.MeterBus.sln --configuration Release --no-build --filter "TestCategory!=Integration" --logger trx --results-directory TestResults
+      - name: Unit Tests
+        run: dotnet test --project tests/Valley.Net.Protocols.MeterBus.Tests/Valley.Net.Protocols.MeterBus.Tests.csproj --configuration Release --no-build --logger trx --results-directory TestResults
 
       - name: Upload test results
         uses: actions/upload-artifact@v4

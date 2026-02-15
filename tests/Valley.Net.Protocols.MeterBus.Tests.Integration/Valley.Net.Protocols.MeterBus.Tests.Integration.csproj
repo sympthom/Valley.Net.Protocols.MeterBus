@@ -1,0 +1,19 @@
+<Project Sdk="MSTest.Sdk/4.0.2">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus\Valley.Net.Protocols.MeterBus.csproj" />
+    <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus.Abstractions\Valley.Net.Protocols.MeterBus.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus.Transport.Tcp\Valley.Net.Protocols.MeterBus.Transport.Tcp.csproj" />
+    <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus.Transport.Udp\Valley.Net.Protocols.MeterBus.Transport.Udp.csproj" />
+    <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus.Transport.Serial\Valley.Net.Protocols.MeterBus.Transport.Serial.csproj" />
+  </ItemGroup>
+
+</Project>
