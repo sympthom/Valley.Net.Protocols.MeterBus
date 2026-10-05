@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <None Include="..\..\DataExamples\**\*.hex;..\..\DataExamples\**\*.xml" CopyToOutputDirectory="PreserveNewest" Link="DataExamples\%(RecursiveDir)%(Filename)%(Extension)" />
+    <None Update="Golden\known-differences.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

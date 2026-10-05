@@ -38,4 +38,42 @@ public static class ByteExtensions
 
     public static string BCDToString(this byte[] data) =>
         BCDToString(data.AsSpan());
+
+    /// <summary>
+    /// Decodes little-endian BCD (EN 13757-3 Annex A type A). A high nibble of 0xF in the most significant
+    /// byte is a minus sign. Returns false when any other nibble is above 9, which meters use to flag errors,
+    /// or when the digits do not fit in a <see cref="long"/>.
+    /// </summary>
+    public static bool TryDecodeBcd(this ReadOnlySpan<byte> data, out long value) =>
+        TryDecodeBcd(data, allowSign: true, out value);
+
+    internal static bool TryDecodeBcd(ReadOnlySpan<byte> data, bool allowSign, out long value)
+    {
+        value = 0;
+        var negative = false;
+
+        for (int i = data.Length - 1; i >= 0; i--)
+        {
+            var high = data[i] >> 4;
+            var low = data[i] & 0x0F;
+
+            if (allowSign && i == data.Length - 1 && high == 0x0F)
+            {
+                negative = true;
+                high = 0;
+            }
+
+            if (high > 9 || low > 9 || value > (long.MaxValue - high * 10 - low) / 100)
+            {
+                value = 0;
+                return false;
+            }
+
+            value = value * 100 + high * 10 + low;
+        }
+
+        if (negative)
+            value = -value;
+        return true;
+    }
 }

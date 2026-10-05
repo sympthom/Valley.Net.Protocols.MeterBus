@@ -1,0 +1,23 @@
+# Fields where the library's decode differs from the libmbus reference in DataExamples/test-frames/*.xml.
+# One "<frame>#<record>:<field> <category>" per line. <record> is the libmbus DataRecord id, "slave" or "frame".
+# GoldenLibmbusTests fails on a difference missing here and on an entry that no longer occurs.
+# Regenerate after a deliberate change and review the diff:
+#   GOLDEN_UPDATE=1 dotnet test --project tests/Valley.Net.Protocols.MeterBus.Tests/Valley.Net.Protocols.MeterBus.Tests.csproj
+ACW_Itron-BM-plus-m#2:Value invalid-date
+ELS_Elster-F96-Plus#4:Value invalid-bcd
+ELS_Elster-F96-Plus#5:Value invalid-bcd
+REL-Relay-Padpuls2#1:Value invalid-date
+SLB_CF-Compact-Integral-MK-MaXX#6:Value negative-bcd
+abb_f95#2:Value invalid-bcd
+abb_f95#3:Value invalid-bcd
+itron_bm_+m#2:Value invalid-date
+itron_cyble_m-bus_v1.4_cold_water#1:Value string
+itron_cyble_m-bus_v1.4_gas#1:Value string
+landis+gyr_ultraheat_t230#8:Value negative-bcd
+landis+gyr_ultraheat_t230#19:Value invalid-date
+landis+gyr_ultraheat_t230#20:Value invalid-date
+landis+gyr_ultraheat_t230#21:Value type
+landis+gyr_ultraheat_t230#22:Value type
+landis+gyr_ultraheat_t230#32:Value invalid-date
+siemens_water#3:Value invalid-date
+siemens_wfh21#3:Value invalid-date

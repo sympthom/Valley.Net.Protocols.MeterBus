@@ -108,6 +108,70 @@ public sealed class ValueParserTests
     }
 
     [TestMethod]
+    [DataRow(DataTypes._2_digit_BCD, new byte[] { 0x05 }, DisplayName = "2-digit")]
+    [DataRow(DataTypes._4_digit_BCD, new byte[] { 0x05, 0x00 }, DisplayName = "4-digit")]
+    [DataRow(DataTypes._6_digit_BCD, new byte[] { 0x05, 0x00, 0x00 }, DisplayName = "6-digit")]
+    [DataRow(DataTypes._8_digit_BCD, new byte[] { 0x05, 0x00, 0x00, 0x00 }, DisplayName = "8-digit")]
+    [DataRow(DataTypes._12_digit_BCD, new byte[] { 0x05, 0x00, 0x00, 0x00, 0x00, 0x00 }, DisplayName = "12-digit")]
+    public void ParseValue_Bcd_IsAlwaysLong(DataTypes dataType, byte[] data)
+    {
+        var result = ValueParser.ParseValue(dataType, data, out var error);
+
+        Assert.IsInstanceOfType<long>(result);
+        Assert.AreEqual(5L, result);
+        Assert.IsNull(error);
+    }
+
+    // EN 13757-3 Annex A: 0xF in the most significant nibble is a minus sign.
+    [TestMethod]
+    [DataRow(DataTypes._2_digit_BCD, new byte[] { 0xF5 }, -5L, DisplayName = "2-digit")]
+    [DataRow(DataTypes._4_digit_BCD, new byte[] { 0x18, 0xF0 }, -18L, DisplayName = "4-digit")]
+    [DataRow(DataTypes._6_digit_BCD, new byte[] { 0x02, 0x00, 0xF5 }, -50002L, DisplayName = "6-digit")]
+    [DataRow(DataTypes._8_digit_BCD, new byte[] { 0x23, 0x01, 0x00, 0xF0 }, -123L, DisplayName = "8-digit")]
+    [DataRow(DataTypes._12_digit_BCD, new byte[] { 0x18, 0x00, 0x00, 0x00, 0x00, 0xF0 }, -18L, DisplayName = "12-digit")]
+    public void ParseValue_Bcd_SignNibble_IsNegative(DataTypes dataType, byte[] data, long expected)
+    {
+        var result = ValueParser.ParseValue(dataType, data, out var error);
+
+        Assert.AreEqual(expected, result);
+        Assert.IsNull(error);
+    }
+
+    [TestMethod]
+    [DataRow(DataTypes._4_digit_BCD, new byte[] { 0xAA, 0xAA }, DisplayName = "Error nibbles AAAA")]
+    [DataRow(DataTypes._8_digit_BCD, new byte[] { 0xFF, 0xFF, 0xFF, 0xFF }, DisplayName = "All F")]
+    [DataRow(DataTypes._4_digit_BCD, new byte[] { 0xF1, 0x00 }, DisplayName = "F outside the most significant nibble")]
+    [DataRow(DataTypes._2_digit_BCD, new byte[] { 0x0F }, DisplayName = "F in the low nibble")]
+    [DataRow(DataTypes._8_digit_BCD, new byte[] { 0xDD, 0xB4, 0xEB, 0xDD }, DisplayName = "abb_f95 record 2, value during error state")]
+    [DataRow(DataTypes._12_digit_BCD, new byte[] { 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00 }, DisplayName = "12-digit")]
+    public void ParseValue_Bcd_NonDecimalDigit_IsInvalidBcd(DataTypes dataType, byte[] data)
+    {
+        var result = ValueParser.ParseValue(dataType, data, out var error);
+
+        Assert.IsNull(result);
+        Assert.AreEqual("INVALID_BCD", error);
+    }
+
+    [TestMethod]
+    public void ParseValue_VariableLength_ReversesText()
+    {
+        // siemens_wfh21 record 6 sends "WFH21" last character first
+        var result = ValueParser.ParseValue(DataTypes._variable_length, [0x31, 0x32, 0x48, 0x46, 0x57]);
+
+        Assert.AreEqual("WFH21", result);
+    }
+
+    [TestMethod]
+    public void ParseValue_VariableLength_DoesNotModifyInput()
+    {
+        byte[] data = [0x31, 0x32];
+
+        ValueParser.ParseValue(DataTypes._variable_length, data);
+
+        CollectionAssert.AreEqual(new byte[] { 0x31, 0x32 }, data);
+    }
+
+    [TestMethod]
     public void ParseValue_32BitReal_ReturnsCorrectValue()
     {
         var bytes = BitConverter.GetBytes(3.14f);
