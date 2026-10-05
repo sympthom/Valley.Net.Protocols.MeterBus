@@ -2,7 +2,7 @@
 
 # Valley.Net.Protocols.MeterBus
 
-[![Build & Test](https://github.com/valleynet/Valley.Net.Protocols.MeterBus/actions/workflows/build.yml/badge.svg)](https://github.com/valleynet/Valley.Net.Protocols.MeterBus/actions/workflows/build.yml)
+[![Build & Test](https://github.com/sympthom/Valley.Net.Protocols.MeterBus/actions/workflows/build.yml/badge.svg)](https://github.com/sympthom/Valley.Net.Protocols.MeterBus/actions/workflows/build.yml)
 
 A modern .NET 10 library for M-Bus (Meter Bus) communication and frame parsing over TCP, UDP, and serial. Implements the EN 13757-2 (physical and link layer) and EN 13757-3 (application layer) standards.
 
@@ -50,9 +50,12 @@ Typical use cases include:
 
 ## Installation
 
+v3 is not yet published to NuGet. nuget.org has only `Valley.Net.Protocols.MeterBus` up to 1.0.3 (.NET Standard 2.0), which has the old v1 API and none of the types used below, and no Abstractions or Transport packages. Until v3 is released, build from source and reference the projects directly:
+
 ```bash
-dotnet add package Valley.Net.Protocols.MeterBus
-dotnet add package Valley.Net.Protocols.MeterBus.Transport.Tcp  # or .Udp / .Serial
+git clone https://github.com/sympthom/Valley.Net.Protocols.MeterBus.git
+dotnet add reference Valley.Net.Protocols.MeterBus/src/Valley.Net.Protocols.MeterBus/Valley.Net.Protocols.MeterBus.csproj
+dotnet add reference Valley.Net.Protocols.MeterBus/src/Valley.Net.Protocols.MeterBus.Transport.Tcp/Valley.Net.Protocols.MeterBus.Transport.Tcp.csproj  # or .Udp / .Serial
 ```
 
 ## Usage
@@ -62,13 +65,18 @@ dotnet add package Valley.Net.Protocols.MeterBus.Transport.Tcp  # or .Udp / .Ser
 ```csharp
 services.AddMBusCore();
 services.AddSingleton<IMBusTransport>(sp =>
-    new TcpMBusTransport("192.168.1.135", 502));
+    new TcpMBusTransport("192.168.1.135", 10001));
+
+// The transport must be connected before the master uses it. The master is a singleton
+// and never disposes the transport; the container (or whoever created it) does.
+await provider.GetRequiredService<IMBusTransport>().ConnectAsync();
+var master = provider.GetRequiredService<IMBusMaster>();
 ```
 
 ### Retrieving meter telemetry
 
 ```csharp
-await using var transport = new TcpMBusTransport("192.168.1.135", 502);
+await using var transport = new TcpMBusTransport("192.168.1.135", 10001);
 await transport.ConnectAsync();
 
 await using var master = new MBusMaster(
@@ -89,7 +97,8 @@ if (packet is VariableDataPacket vdp)
 ### Scanning for devices
 
 ```csharp
-var addresses = Enumerable.Range(0, 250).Select(i => (byte)i);
+// Primary addresses 0-250 (0 = unconfigured; 251-255 are reserved, network-layer or broadcast)
+var addresses = Enumerable.Range(0, 251).Select(i => (byte)i);
 await foreach (var meter in master.ScanAsync(addresses))
 {
     Console.WriteLine($"Found meter at address {meter.Address}");
@@ -120,19 +129,19 @@ if (frame.IsSuccess)
 - **Async-first** -- `CancellationToken` everywhere, `IAsyncEnumerable` for scanning
 - **Zero external dependencies** -- Abstractions project has no NuGet dependencies
 - **Dependency Injection** -- All services are injectable via `IServiceCollection.AddMBusCore()`
-- **Span-based parsing** -- `ReadOnlySpan<byte>` for zero-allocation frame parsing
+- **Span-based parsing** -- `FrameParser` validates the `ReadOnlySpan<byte>` input in place; each frame allocates only its result record, plus a copy of the payload for long frames
 
 ## Building from source
 
 ```bash
 dotnet restore Valley.Net.Protocols.MeterBus.sln
 dotnet build Valley.Net.Protocols.MeterBus.sln --configuration Release
-dotnet test Valley.Net.Protocols.MeterBus.sln --configuration Release
+dotnet test --solution Valley.Net.Protocols.MeterBus.sln --configuration Release
 ```
 
 ## Changelog
 
-### v3.0.0
+### v3.0.0 (unreleased)
 
 - **Full architectural rewrite** -- Multi-project solution with clean separation of concerns
 - Replaced `Valley.Net.Bindings` dependency with native `IMBusTransport` abstraction
@@ -145,10 +154,10 @@ dotnet test Valley.Net.Protocols.MeterBus.sln --configuration Release
 - UDP transport using raw `Socket`
 - Serial transport wrapping `System.IO.Ports` with `PipeReader`
 - `IServiceCollection.AddMBusCore()` for DI registration
-- 168 unit tests using MSTest 4.x with `[DynamicData]` against 80+ real meter hex files
+- MSTest 4.x unit tests, with `[DynamicData]` over the 73 meter frames in `DataExamples/test-frames` (70 of them with libmbus reference decodes)
 - Separate integration test project
 
-### v2.0.0
+### v2.0.0 (not published to NuGet)
 
 - Upgraded to .NET 10 (from .NET Standard 2.0 / .NET Framework 4.6.1)
 - Added GitHub Actions CI/CD workflows (build, test, NuGet publish)
@@ -165,11 +174,16 @@ dotnet test Valley.Net.Protocols.MeterBus.sln --configuration Release
 - Consolidated duplicate `LengthsInBitsTable`
 - General code cleanup and modernization
 
+### v1.0.3 (2019.12.28)
+
+- Extension methods for deserializing frames and packets
+- Fixed Actuality Duration and VIF naming
+
 ### v1.0.2 (2019.10.13)
 
 - Serial communication capability
 
-### v1.0.1 (2019.10.12)
+### v1.0.1 (2019.10.12, not published to NuGet)
 
 - Bug fixes
 

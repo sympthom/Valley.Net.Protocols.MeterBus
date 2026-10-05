@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 
 namespace Valley.Net.Protocols.MeterBus;
 
@@ -52,7 +53,9 @@ public sealed class PacketMapper : IPacketMapper
         var status = data[9];
         var signature = BitConverter.ToUInt16(data.Slice(10, 2));
 
-        var records = ParseDataRecords(data.Slice(12));
+        var body = ParseDataRecords(data.Slice(12));
+        if (!body.IsSuccess)
+            return MBusParseResult<MBusPacket>.Fail(body.Error!);
 
         return MBusParseResult<MBusPacket>.Ok(new VariableDataPacket(
             frame.Address,
@@ -63,14 +66,18 @@ public sealed class PacketMapper : IPacketMapper
             transmissionCounter,
             status,
             signature,
-            records));
+            body.Value!.Records)
+        {
+            ManufacturerData = body.Value.ManufacturerData,
+            MoreRecordsFollow = body.Value.MoreRecordsFollow,
+        });
     }
 
     private MBusParseResult<MBusPacket> MapFixedDataFrame(LongFrame frame)
     {
         var data = frame.Data.Span;
-        if (data.Length < 8)
-            return MBusParseResult<MBusPacket>.Fail("FIXED_FRAME_TOO_SHORT", "Fixed data frame requires at least 8 bytes");
+        if (data.Length != 16)
+            return MBusParseResult<MBusPacket>.Fail("FIXED_FRAME_INVALID_LENGTH", $"Fixed data frame requires exactly 16 bytes, got {data.Length}");
 
         var identificationNo = ParseIdentificationNo(data.Slice(0, 4));
         var transmissionCounter = data[4];
@@ -84,19 +91,16 @@ public sealed class PacketMapper : IPacketMapper
         var units2 = (FixedDataUnits)(buf7 & 0x3F);
         var deviceType = (DeviceType)(byte)(((buf6 & 0xC0) >> 6) | ((buf7 & 0xC0) >> 4));
 
-        uint counter1 = 0, counter2 = 0;
-        if (data.Length >= 16)
+        uint counter1, counter2;
+        if (countersBcd)
         {
-            if (countersBcd)
-            {
-                counter1 = ParseBcdOrBinary(data.Slice(8, 4));
-                counter2 = ParseBcdOrBinary(data.Slice(12, 4));
-            }
-            else
-            {
-                counter1 = BitConverter.ToUInt32(data.Slice(8, 4));
-                counter2 = BitConverter.ToUInt32(data.Slice(12, 4));
-            }
+            counter1 = ParseBcdOrBinary(data.Slice(8, 4));
+            counter2 = ParseBcdOrBinary(data.Slice(12, 4));
+        }
+        else
+        {
+            counter1 = BitConverter.ToUInt32(data.Slice(8, 4));
+            counter2 = BitConverter.ToUInt32(data.Slice(12, 4));
         }
 
         return MBusParseResult<MBusPacket>.Ok(new FixedDataPacket(
@@ -111,7 +115,7 @@ public sealed class PacketMapper : IPacketMapper
             counter2));
     }
 
-    private ImmutableArray<DataRecord> ParseDataRecords(ReadOnlySpan<byte> data)
+    private MBusParseResult<DataRecordBlock> ParseDataRecords(ReadOnlySpan<byte> data)
     {
         var records = ImmutableArray.CreateBuilder<DataRecord>();
         var offset = 0;
@@ -123,13 +127,15 @@ public sealed class PacketMapper : IPacketMapper
             switch ((VariableDataRecordType)type)
             {
                 case VariableDataRecordType.MBUS_DIB_DIF_IDLE_FILLER:
-                case VariableDataRecordType.MBUS_DIB_DIF_MORE_RECORDS_FOLLOW:
                     continue;
 
                 case VariableDataRecordType.MBUS_DIB_DIF_MANUFACTURER_SPECIFIC:
-                    // Rest is manufacturer specific, skip
-                    offset = data.Length;
-                    continue;
+                case VariableDataRecordType.MBUS_DIB_DIF_MORE_RECORDS_FOLLOW:
+                    // The rest of the user data is manufacturer specific, not records
+                    return MBusParseResult<DataRecordBlock>.Ok(new DataRecordBlock(
+                        records.ToImmutable(),
+                        ImmutableArray.Create(data.Slice(offset)),
+                        (VariableDataRecordType)type == VariableDataRecordType.MBUS_DIB_DIF_MORE_RECORDS_FOLLOW));
             }
 
             // Parse DIF
@@ -172,16 +178,34 @@ public sealed class PacketMapper : IPacketMapper
             var vifByte = data[offset++];
             var vifInfo = _vifLookup.Resolve(vifByte);
 
-            var units = ImmutableArray.CreateBuilder<UnitInfo>();
-            units.Add(new UnitInfo(vifInfo.Units, vifInfo.Unit, vifInfo.Magnitude, vifInfo.Quantity, vifInfo.VifString));
+            var vifUnit = new UnitInfo(vifInfo.Units, vifInfo.Unit, vifInfo.Magnitude, vifInfo.Quantity, vifInfo.VifString);
 
-            // Determine extension table
+            // Plain-text VIF: a length byte and the ASCII unit (rightmost character first) come before any VIFEs
+            if (vifInfo.Type == VifType.PlainTextVIF)
+            {
+                if (offset >= data.Length || offset + 1 + data[offset] > data.Length)
+                    return MBusParseResult<DataRecordBlock>.Fail("PLAIN_TEXT_VIF_TRUNCATED", $"Plain-text VIF unit of record {records.Count} runs past the end of the data");
+
+                var textLength = data[offset++];
+                var text = data.Slice(offset, textLength).ToArray();
+                Array.Reverse(text);
+                vifUnit = vifUnit with { Unit = Encoding.ASCII.GetString(text) };
+                offset += textLength;
+            }
+
+            var units = ImmutableArray.CreateBuilder<UnitInfo>();
+            units.Add(vifUnit);
+
+            // Only the first VIFE after FB/FD is the true VIF from that table; later ones are combinable VIFEs
             var extensionTable = vifInfo.Type switch
             {
                 VifType.LinearVIFExtensionFB => VifExtensionTable.FB,
                 VifType.LinearVIFExtensionFD => VifExtensionTable.FD,
                 _ => VifExtensionTable.Primary,
             };
+
+            // After VIF or VIFE 7Fh the remaining VIFEs have manufacturer-specific coding and no standard meaning
+            var manufacturerSpecific = vifInfo.Type == VifType.ManufacturerSpecific;
 
             // Parse VIFEs
             var vifeExtension = vifInfo.HasExtension;
@@ -190,10 +214,19 @@ public sealed class PacketMapper : IPacketMapper
             {
                 if (vifeCount > 10) break;
                 var vifeByte = data[offset++];
+                vifeExtension = (vifeByte & 0x80) != 0;
+                vifeCount++;
+
+                if (manufacturerSpecific)
+                {
+                    units.Add(new UnitInfo(VariableDataQuantityUnit.ManufacturerSpecific, null, 0, null, $"{vifeByte & 0x7F:X2}h"));
+                    continue;
+                }
+
                 var vifeInfo = _vifLookup.ResolveExtension(vifeByte, extensionTable);
                 units.Add(new UnitInfo(vifeInfo.Units, vifeInfo.Unit, vifeInfo.Magnitude, vifeInfo.Quantity, vifeInfo.VifString));
-                vifeExtension = vifeInfo.HasExtension;
-                vifeCount++;
+                manufacturerSpecific = extensionTable == VifExtensionTable.Primary && (vifeByte & 0x7F) == 0x7F;
+                extensionTable = VifExtensionTable.Primary;
             }
 
             // Parse value
@@ -226,7 +259,7 @@ public sealed class PacketMapper : IPacketMapper
                 units.ToImmutable()));
         }
 
-        return records.ToImmutable();
+        return MBusParseResult<DataRecordBlock>.Ok(new DataRecordBlock(records.ToImmutable(), ImmutableArray<byte>.Empty, false));
     }
 
     private static uint ParseIdentificationNo(ReadOnlySpan<byte> identificationNo)
@@ -248,4 +281,9 @@ public sealed class PacketMapper : IPacketMapper
             return result;
         return BitConverter.ToUInt32(bytes, 0);
     }
+
+    private sealed record DataRecordBlock(
+        ImmutableArray<DataRecord> Records,
+        ImmutableArray<byte> ManufacturerData,
+        bool MoreRecordsFollow);
 }

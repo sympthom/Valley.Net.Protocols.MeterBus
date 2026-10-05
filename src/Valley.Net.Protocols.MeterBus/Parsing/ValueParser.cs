@@ -16,7 +16,8 @@ public static class ValueParser
 
             case DataTypes._8_Bit_Integer:
                 if (data.Length < 1) return null;
-                return data[0];
+                // Type B integers are two's complement at every width, as in libmbus.
+                return (sbyte)data[0];
 
             case DataTypes._16_Bit_Integer:
                 if (data.Length < 2) return null;
@@ -24,7 +25,8 @@ public static class ValueParser
 
             case DataTypes._24_Bit_Integer:
                 if (data.Length < 3) return null;
-                return data[0] | (data[1] << 8) | (data[2] << 16);
+                // Shift bit 23 into the sign bit and back to sign-extend.
+                return (data[0] | (data[1] << 8) | (data[2] << 16)) << 8 >> 8;
 
             case DataTypes._32_Bit_Integer:
                 if (data.Length < 4) return null;
@@ -40,7 +42,8 @@ public static class ValueParser
                     long val = 0;
                     for (int i = 5; i >= 0; i--)
                         val = (val << 8) | data[i];
-                    return val;
+                    // Sign-extend from bit 47.
+                    return val << 16 >> 16;
                 }
 
             case DataTypes._64_Bit_Integer:
@@ -51,31 +54,23 @@ public static class ValueParser
                 return null;
 
             case DataTypes._2_digit_BCD:
-                if (data.Length < 1) return null;
-                return TryParseBcd(data.BCDDecode(1), out var bcd2) ? bcd2 : (object?)data.BCDDecode(1);
+                return ParseBcd(data, 1);
 
             case DataTypes._4_digit_BCD:
-                if (data.Length < 2) return null;
-                return TryParseBcd(data.BCDDecode(2), out var bcd4) ? bcd4 : (object?)data.BCDDecode(2);
+                return ParseBcd(data, 2);
 
             case DataTypes._6_digit_BCD:
-                if (data.Length < 3) return null;
-                return TryParseBcd(data.BCDDecode(3), out var bcd6) ? bcd6 : (object?)data.BCDDecode(3);
+                return ParseBcd(data, 3);
 
             case DataTypes._8_digit_BCD:
-                if (data.Length < 4) return null;
-                return TryParseBcd(data.BCDDecode(4), out var bcd8) ? bcd8 : (object?)data.BCDDecode(4);
+                return ParseBcd(data, 4);
 
             case DataTypes._variable_length:
                 if (data is null || data.Length == 0) return null;
                 return Encoding.ASCII.GetString(data).TrimEnd('\0');
 
             case DataTypes._12_digit_BCD:
-                if (data.Length < 6) return null;
-                {
-                    var bcdStr = data.BCDToString();
-                    return long.TryParse(bcdStr, out var bcd12) ? bcd12 : (object?)bcdStr;
-                }
+                return ParseBcd(data, 6);
 
             default:
                 return null;
@@ -120,8 +115,10 @@ public static class ValueParser
         return null;
     }
 
-    private static bool TryParseBcd(string bcdString, out long result)
+    private static object? ParseBcd(byte[] data, int length)
     {
-        return long.TryParse(bcdString, out result);
+        if (data.Length < length) return null;
+        var bcdStr = data.AsSpan(0, length).BCDToString();
+        return long.TryParse(bcdStr, out var result) ? result : bcdStr;
     }
 }

@@ -62,6 +62,30 @@ public sealed class UdpMBusTransport : IMBusTransport
         return new ReadOnlyMemory<byte>(buffer, 0, received);
     }
 
+    public ValueTask DiscardInputAsync(CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (_socket is null)
+            throw new InvalidOperationException("Transport is not connected");
+
+        // Each Receive drops one queued datagram; Available > 0 means it will not block
+        var scratch = new byte[512];
+        while (_socket.Available > 0)
+        {
+            try
+            {
+                _socket.Receive(scratch, SocketFlags.None);
+            }
+            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.MessageSize)
+            {
+                // An oversized datagram is dropped all the same
+            }
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
     public ValueTask DisposeAsync()
     {
         if (!_disposed)

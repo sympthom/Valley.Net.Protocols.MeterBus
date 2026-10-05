@@ -11,10 +11,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus\Valley.Net.Protocols.MeterBus.csproj" />
     <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus.Abstractions\Valley.Net.Protocols.MeterBus.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus.Transport.Tcp\Valley.Net.Protocols.MeterBus.Transport.Tcp.csproj" />
+    <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus.Transport.Udp\Valley.Net.Protocols.MeterBus.Transport.Udp.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="..\..\DataExamples\**\*.hex" CopyToOutputDirectory="PreserveNewest" Link="DataExamples\%(RecursiveDir)%(Filename)%(Extension)" />
+    <None Include="..\..\DataExamples\**\*.hex;..\..\DataExamples\**\*.xml" CopyToOutputDirectory="PreserveNewest" Link="DataExamples\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

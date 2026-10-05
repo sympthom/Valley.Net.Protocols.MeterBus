@@ -17,6 +17,10 @@ public static class MBusConstants
     public const int FRAME_FIXED_SIZE_SHORT = 5;
     public const int FRAME_FIXED_SIZE_LONG = 6;
 
+    // The L-field (C + A + CI + data) is a single byte.
+    public const int FRAME_LONG_MAX_DATA_LENGTH = 252;
+
+    public const byte ADDRESS_PRIMARY_MAX = 250;
     public const byte ADDRESS_BROADCAST_NOREPLY = 0xFF;
     public const byte ADDRESS_BROADCAST_REPLY = 0xFE;
     public const byte ADDRESS_NETWORK_LAYER = 0xFD;

@@ -24,18 +24,8 @@ public static class ByteExtensions
     public static string ToHex(this ReadOnlyMemory<byte> data) =>
         BitConverter.ToString(data.ToArray()).Replace("-", " ");
 
-    public static string BCDDecode(this byte[] data, int digits)
-    {
-        var sb = new StringBuilder(digits);
-        for (int i = digits / 2 - 1; i >= 0; i--)
-        {
-            sb.Append((char)('0' + ((data[i] >> 4) & 0x0F)));
-            sb.Append((char)('0' + (data[i] & 0x0F)));
-        }
-        return sb.ToString();
-    }
-
-    public static string BCDToString(this byte[] data)
+    // BCD is little-endian with two digits per byte, so the most significant byte is last.
+    public static string BCDToString(this ReadOnlySpan<byte> data)
     {
         var sb = new StringBuilder(data.Length * 2);
         for (int i = data.Length - 1; i >= 0; i--)
@@ -45,4 +35,7 @@ public static class ByteExtensions
         }
         return sb.ToString();
     }
+
+    public static string BCDToString(this byte[] data) =>
+        BCDToString(data.AsSpan());
 }

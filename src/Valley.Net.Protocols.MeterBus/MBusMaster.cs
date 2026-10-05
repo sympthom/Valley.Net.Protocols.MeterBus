@@ -6,7 +6,11 @@ namespace Valley.Net.Protocols.MeterBus;
 /// Modern M-Bus master implementation using async/await, CancellationToken, and DI.
 /// Replaces the old event-driven MBusMaster class.
 /// </summary>
-public sealed class MBusMaster : IMBusMaster
+/// <remarks>
+/// The master does not own the transport: disposing the master leaves the transport open for
+/// whoever created it.
+/// </remarks>
+public sealed class MBusMaster : IMBusMaster, IDisposable
 {
     private readonly IMBusTransport _transport;
     private readonly IFrameParser _parser;
@@ -38,7 +42,7 @@ public sealed class MBusMaster : IMBusMaster
             var response = await ReceiveFrameAsync(ct);
             return response is AckFrame;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             return false;
         }
@@ -57,10 +61,12 @@ public sealed class MBusMaster : IMBusMaster
     public async Task SetAddressAsync(byte address, byte newAddress, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        // 251-255 are reserved or broadcast; a meter given one of them can no longer be reached by primary address.
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(newAddress, MBusConstants.ADDRESS_PRIMARY_MAX);
 
         byte[] data = [MBusConstants.SET_ADDRESS_DIF, MBusConstants.SET_ADDRESS_VIF, newAddress];
         var frame = BuildLongFrame(ControlMask.SND_UD, ControlInformation.DATA_SEND, address, data);
-        await SendFrameAsync(frame, ct);
+        await SendExpectAckAsync(frame, address, ct);
     }
 
     public async Task InitializeAsync(byte address, CancellationToken ct = default)
@@ -68,7 +74,7 @@ public sealed class MBusMaster : IMBusMaster
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         var frame = new ShortFrame(ControlMask.SND_NKE, address, ComputeShortCrc(ControlMask.SND_NKE, address));
-        await SendFrameAsync(frame, ct);
+        await SendExpectAckAsync(frame, address, ct);
     }
 
     public async Task ResetApplicationAsync(byte address, CancellationToken ct = default)
@@ -79,7 +85,7 @@ public sealed class MBusMaster : IMBusMaster
         byte control = (byte)ControlMask.SND_UD;
         byte crc = (byte)(control + address + (byte)ci);
         var frame = new ControlFrame(ControlMask.SND_UD, ci, address, crc);
-        await SendFrameAsync(frame, ct);
+        await SendExpectAckAsync(frame, address, ct);
     }
 
     public async IAsyncEnumerable<MeterInfo> ScanAsync(
@@ -101,7 +107,7 @@ public sealed class MBusMaster : IMBusMaster
             {
                 response = await ReceiveFrameAsync(ct);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
                 continue;
             }
@@ -119,7 +125,7 @@ public sealed class MBusMaster : IMBusMaster
             {
                 dataResponse = await ReceiveFrameAsync(ct);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
                 dataFailed = true;
             }
@@ -130,6 +136,10 @@ public sealed class MBusMaster : IMBusMaster
             }
             else if (dataResponse is LongFrame lf)
             {
+                // Another meter's reply (a late one, or a collision) says nothing about this address.
+                if (!IsReplyFrom(lf, address))
+                    continue;
+
                 var result = _mapper.MapToPacket(lf);
                 yield return new MeterInfo(address, result.IsSuccess ? result.Value : null);
             }
@@ -145,11 +155,7 @@ public sealed class MBusMaster : IMBusMaster
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         var frame = BuildLongFrame(ControlMask.SND_UD, ControlInformation.DATA_SEND, address, data.Span);
-        await SendFrameAsync(frame, ct);
-
-        var response = await ReceiveFrameAsync(ct);
-        if (response is not AckFrame)
-            throw new InvalidOperationException("Expected ACK response");
+        await SendExpectAckAsync(frame, address, ct);
     }
 
     public async Task SelectSlaveAsync(byte address, SecondaryAddress secondary, CancellationToken ct = default)
@@ -169,21 +175,16 @@ public sealed class MBusMaster : IMBusMaster
         data[7] = (byte)secondary.DeviceType;
 
         var frame = BuildLongFrame(ControlMask.SND_UD, ControlInformation.SELECT_SLAVE, address, data);
-        await SendFrameAsync(frame, ct);
-
-        var response = await ReceiveFrameAsync(ct);
-        if (response is not AckFrame)
-            throw new InvalidOperationException("Expected ACK response for slave selection");
+        await SendExpectAckAsync(frame, address, ct);
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (!_disposed)
-        {
-            _disposed = true;
-            await _transport.DisposeAsync();
-        }
+        Dispose();
+        return ValueTask.CompletedTask;
     }
+
+    public void Dispose() => _disposed = true;
 
     // ---- Private helpers ----
 
@@ -194,8 +195,24 @@ public sealed class MBusMaster : IMBusMaster
         var frame = new ShortFrame(controlMask, address, ComputeShortCrc(controlMask, address));
         await SendFrameAsync(frame, ct);
 
-        var response = await ReceiveFrameAsync(ct);
-        var result = _mapper.MapToPacket(response);
+        MBusFrame response;
+        try
+        {
+            response = await ReceiveFrameAsync(ct);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException($"No reply from M-Bus address {address}");
+        }
+
+        // An E5 is never a valid answer to REQ_UD1/REQ_UD2; accepting it would shift every later reply by one.
+        if (response is not LongFrame lf)
+            throw new InvalidOperationException($"Expected RSP_UD from M-Bus address {address}, got {response.GetType().Name}");
+
+        if (!IsReplyFrom(lf, address))
+            throw new InvalidOperationException($"Reply from M-Bus address {lf.Address} does not match requested address {address}");
+
+        var result = _mapper.MapToPacket(lf);
 
         if (!result.IsSuccess)
             throw new InvalidOperationException($"Failed to map response: {result.Error?.Message}");
@@ -203,9 +220,37 @@ public sealed class MBusMaster : IMBusMaster
         return result.Value!;
     }
 
+    /// <summary>
+    /// Sends an SND_NKE or SND_UD and consumes the slave's E5, so it cannot be taken as the reply
+    /// to the next request. Broadcast 0xFF is never answered, so nothing is read for it.
+    /// </summary>
+    private async Task SendExpectAckAsync(MBusFrame frame, byte address, CancellationToken ct)
+    {
+        await SendFrameAsync(frame, ct);
+
+        if (address == MBusConstants.ADDRESS_BROADCAST_NOREPLY)
+            return;
+
+        MBusFrame response;
+        try
+        {
+            response = await ReceiveFrameAsync(ct);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException($"No ACK from M-Bus address {address}");
+        }
+
+        if (response is not AckFrame)
+            throw new InvalidOperationException($"Expected ACK from M-Bus address {address}, got {response.GetType().Name}");
+    }
+
     private async Task SendFrameAsync(MBusFrame frame, CancellationToken ct)
     {
         var bytes = _serializer.Serialize(frame);
+
+        // Drop anything a slave sent after an earlier exchange gave up, so it is not read as this frame's reply.
+        await _transport.DiscardInputAsync(ct);
         await _transport.SendFrameAsync(bytes, ct);
     }
 
@@ -219,6 +264,11 @@ public sealed class MBusMaster : IMBusMaster
 
         return result.Value!;
     }
+
+    // A slave reached through the network layer (0xFD) or the test broadcast (0xFE) answers with its own primary address.
+    private static bool IsReplyFrom(LongFrame reply, byte address)
+        => address is MBusConstants.ADDRESS_NETWORK_LAYER or MBusConstants.ADDRESS_BROADCAST_REPLY
+           || reply.Address == address;
 
     private static byte ComputeShortCrc(ControlMask control, byte address)
         => (byte)((byte)control + address);

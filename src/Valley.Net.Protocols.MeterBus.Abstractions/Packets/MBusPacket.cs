@@ -47,7 +47,18 @@ public sealed record VariableDataPacket(
     byte TransmissionCounter,
     byte Status,
     ushort Signature,
-    ImmutableArray<DataRecord> Records) : MBusPacket(Address);
+    ImmutableArray<DataRecord> Records) : MBusPacket(Address)
+{
+    /// <summary>
+    /// Bytes after a DIF 0x0F/0x1F, which have manufacturer-specific coding. Empty when the telegram has none.
+    /// </summary>
+    public ImmutableArray<byte> ManufacturerData { get; init; } = ImmutableArray<byte>.Empty;
+
+    /// <summary>
+    /// True when the records ended with DIF 0x1F: the meter has more records for the next REQ_UD2.
+    /// </summary>
+    public bool MoreRecordsFollow { get; init; }
+}
 
 public sealed record DataRecord(
     VariableDataRecordType RecordType,

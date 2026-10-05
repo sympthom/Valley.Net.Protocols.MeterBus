@@ -19,7 +19,7 @@ public sealed class FrameSerializer : IFrameSerializer
         AckFrame => 1,
         ShortFrame => 5,
         ControlFrame => 9,
-        LongFrame lf => lf.Data.Length + 9,
+        LongFrame lf => CheckedDataLength(lf) + 9,
         _ => throw new ArgumentException($"Unknown frame type: {frame.GetType().Name}")
     };
 
@@ -49,7 +49,7 @@ public sealed class FrameSerializer : IFrameSerializer
     private static byte[] SerializeLong(LongFrame frame)
     {
         var data = frame.Data.Span;
-        var length = (byte)(data.Length + 3);
+        var length = (byte)(CheckedDataLength(frame) + 3);
         var control = (byte)frame.Control;
         var ci = (byte)frame.ControlInformation;
 
@@ -70,5 +70,14 @@ public sealed class FrameSerializer : IFrameSerializer
         result[7 + data.Length] = crc;
         result[8 + data.Length] = MBusConstants.FRAME_STOP;
         return result;
+    }
+
+    // A longer payload would wrap the one-byte L-field and put a frame on the wire that no slave can parse.
+    private static int CheckedDataLength(LongFrame frame)
+    {
+        if (frame.Data.Length > MBusConstants.FRAME_LONG_MAX_DATA_LENGTH)
+            throw new ArgumentOutOfRangeException(nameof(frame),
+                $"Long frame data is {frame.Data.Length} bytes; at most {MBusConstants.FRAME_LONG_MAX_DATA_LENGTH} fit in the L-field");
+        return frame.Data.Length;
     }
 }
