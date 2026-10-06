@@ -25,6 +25,16 @@ public static class MBusConstants
     public const byte ADDRESS_BROADCAST_REPLY = 0xFE;
     public const byte ADDRESS_NETWORK_LAYER = 0xFD;
 
+    // The secondary identification number is eight BCD digits.
+    public const uint SECONDARY_ID_MAX = 99_999_999;
+
+    // MBusError codes for the checks MBusMaster makes on a reply; parser and mapper failures keep their own codes.
+    public const string ERROR_UNEXPECTED_FRAME = "UNEXPECTED_FRAME";
+    public const string ERROR_ADDRESS_MISMATCH = "ADDRESS_MISMATCH";
+    public const string ERROR_NO_REPLY = "NO_REPLY";
+    public const string ERROR_TELEGRAM_LIMIT = "TELEGRAM_LIMIT";
+    public const string ERROR_TELEGRAM_MISMATCH = "TELEGRAM_MISMATCH";
+
     public static readonly Dictionary<DataTypes, int> LengthsInBitsTable = new()
     {
         { DataTypes._No_data, 0 },

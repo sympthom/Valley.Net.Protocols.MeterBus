@@ -15,6 +15,24 @@ public sealed class FrameParserTests
         Assert.IsInstanceOfType<AckFrame>(result.Value);
     }
 
+    // Parse takes exactly one frame, so a reply merged with more bytes (a collision, a second
+    // frame in one datagram) is reported instead of the extra bytes being dropped.
+    [TestMethod]
+    [DataRow("E5 E5", DisplayName = "Two ACKs")]
+    [DataRow("E5 FF FF 68 00", DisplayName = "ACK with trailing bytes")]
+    [DataRow("E5 10 5B 01 5C 16", DisplayName = "ACK followed by a short frame")]
+    [DataRow("10 40 01 41 16 99 99", DisplayName = "Short frame with trailing bytes")]
+    [DataRow("68 03 03 68 53 01 50 A4 16 AA", DisplayName = "Control frame with a trailing byte")]
+    [DataRow("68 05 05 68 08 01 72 AB CD F3 16 DE AD BE EF", DisplayName = "Long frame with trailing bytes")]
+    [DataRow("68 05 05 68 08 01 72 AB CD F3 16 E5", DisplayName = "Long frame followed by an ACK")]
+    public void Parse_TrailingBytesAfterFrame_ReturnsTrailingData(string hex)
+    {
+        var result = _parser.Parse(hex.HexToBytes());
+
+        Assert.IsFalse(result.IsSuccess, $"Parsed as {result.Value}");
+        Assert.AreEqual("TRAILING_DATA", result.Error?.Code);
+    }
+
     [TestMethod]
     public void Parse_EmptyData_ReturnsFail()
     {

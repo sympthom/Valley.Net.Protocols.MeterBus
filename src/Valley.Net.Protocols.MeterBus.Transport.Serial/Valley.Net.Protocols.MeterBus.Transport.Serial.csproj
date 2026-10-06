@@ -13,7 +13,10 @@
 
   <ItemGroup>
     <PackageReference Include="System.IO.Ports" Version="10.0.3" />
+  </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Valley.Net.Protocols.MeterBus.Tests" />
   </ItemGroup>
 
   <ItemGroup>

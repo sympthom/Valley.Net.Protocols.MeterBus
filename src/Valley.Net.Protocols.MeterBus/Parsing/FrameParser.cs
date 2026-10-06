@@ -12,11 +12,20 @@ public sealed class FrameParser : IFrameParser
 
         return data[0] switch
         {
-            MBusConstants.FRAME_ACK_START => MBusParseResult<MBusFrame>.Ok(new AckFrame()),
+            MBusConstants.FRAME_ACK_START => ParseAck(data),
             MBusConstants.FRAME_SHORT_START => ParseShortFrame(data),
             MBusConstants.FRAME_LONG_START => ParseLongFrame(data),
             _ => MBusParseResult<MBusFrame>.Fail("UNKNOWN_START", $"Unknown start byte: 0x{data[0]:X2}")
         };
+    }
+
+    private static MBusParseResult<MBusFrame> ParseAck(ReadOnlySpan<byte> data)
+    {
+        // E5 followed by more bytes is not an ACK: it may be several slaves answering at once
+        if (data.Length != 1)
+            return TrailingData(1, data.Length);
+
+        return MBusParseResult<MBusFrame>.Ok(new AckFrame());
     }
 
     private static MBusParseResult<MBusFrame> ParseShortFrame(ReadOnlySpan<byte> data)
@@ -34,6 +43,9 @@ public sealed class FrameParser : IFrameParser
 
         if (stop != MBusConstants.FRAME_STOP)
             return MBusParseResult<MBusFrame>.Fail("INVALID_STOP", "Short frame missing stop byte");
+
+        if (data.Length != MBusConstants.FRAME_FIXED_SIZE_SHORT)
+            return TrailingData(MBusConstants.FRAME_FIXED_SIZE_SHORT, data.Length);
 
         return MBusParseResult<MBusFrame>.Ok(new ShortFrame((ControlMask)control, address, crc));
     }
@@ -78,6 +90,9 @@ public sealed class FrameParser : IFrameParser
         if (stop != MBusConstants.FRAME_STOP)
             return MBusParseResult<MBusFrame>.Fail("INVALID_STOP", "Long frame missing stop byte");
 
+        if (data.Length != totalLength)
+            return TrailingData(totalLength, data.Length);
+
         if (dataLength == 0)
         {
             return MBusParseResult<MBusFrame>.Ok(new ControlFrame(
@@ -94,6 +109,10 @@ public sealed class FrameParser : IFrameParser
             payload.ToArray(),
             crc));
     }
+
+    // Parse takes exactly one frame; bytes after it would otherwise be dropped without a trace
+    private static MBusParseResult<MBusFrame> TrailingData(int frameLength, int dataLength)
+        => MBusParseResult<MBusFrame>.Fail("TRAILING_DATA", $"{dataLength - frameLength} bytes after the {frameLength}-byte frame");
 
     internal static byte Checksum(ReadOnlySpan<byte> data)
     {

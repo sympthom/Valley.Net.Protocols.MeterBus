@@ -9,10 +9,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus\Valley.Net.Protocols.MeterBus.csproj" />
     <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus.Abstractions\Valley.Net.Protocols.MeterBus.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus.Transport.Tcp\Valley.Net.Protocols.MeterBus.Transport.Tcp.csproj" />
     <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus.Transport.Udp\Valley.Net.Protocols.MeterBus.Transport.Udp.csproj" />
+    <ProjectReference Include="..\..\src\Valley.Net.Protocols.MeterBus.Transport.Serial\Valley.Net.Protocols.MeterBus.Transport.Serial.csproj" />
   </ItemGroup>
 
   <ItemGroup>

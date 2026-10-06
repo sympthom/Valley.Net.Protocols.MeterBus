@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.IO.Pipelines;
 using System.IO.Ports;
 
@@ -7,203 +8,413 @@ namespace Valley.Net.Protocols.MeterBus;
 /// <summary>
 /// Serial port transport for M-Bus communication, wrapping System.IO.Ports with PipeReader.
 /// </summary>
-public sealed class SerialMBusTransport : IMBusTransport
+public sealed class SerialMBusTransport : IMBusTransport, IDisposable
 {
+    // Slack for USB adapter latency timers and thread scheduling on top of the bus timing
+    private static readonly TimeSpan Margin = TimeSpan.FromMilliseconds(100);
+
+    // How late, at most, a receive timeout or cancellation takes effect on Windows (see SerialReadStream)
+    private static readonly TimeSpan ReadPollInterval = TimeSpan.FromMilliseconds(20);
+
     private readonly string _portName;
-    private readonly int _baudRate;
-    private readonly TimeSpan _timeout;
-    private SerialPort? _serialPort;
-    private PipeReader? _reader;
+    private readonly SerialMBusTransportOptions _options;
+    private readonly Lock _sync = new();
+    private readonly CancellationTokenSource _disposeCts = new();
+    private Connection? _connection;
+    private byte[]? _echo;
     private bool _disposed;
 
-    public SerialMBusTransport(string portName, int baudRate = 2400, TimeSpan? timeout = null)
+    public SerialMBusTransport(string portName, int baudRate = 2400)
+        : this(portName, new SerialMBusTransportOptions { BaudRate = baudRate })
     {
-        _portName = portName ?? throw new ArgumentNullException(nameof(portName));
-        _baudRate = baudRate;
-        _timeout = timeout ?? TimeSpan.FromSeconds(5);
     }
 
-    public ValueTask ConnectAsync(CancellationToken ct = default)
+    public SerialMBusTransport(string portName, SerialMBusTransportOptions options)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(portName);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.BaudRate, nameof(options.BaudRate));
 
-        _serialPort = new SerialPort(_portName, _baudRate, Parity.Even, 8, StopBits.One)
+        _portName = portName;
+        _options = options;
+
+        var maxFrameTime = BitTimes(CharacterBits(options) * MBusDeframer.MaxFrameLength);
+
+        ResponseTimeout = Positive(options.ResponseTimeout, nameof(options.ResponseTimeout))
+            ?? BitTimes(330) + TimeSpan.FromMilliseconds(50) + Margin;
+        InterCharacterTimeout = Positive(options.InterCharacterTimeout, nameof(options.InterCharacterTimeout))
+            ?? BitTimes(33) + Margin;
+        WriteTimeout = Positive(options.WriteTimeout, nameof(options.WriteTimeout))
+            ?? maxFrameTime + Margin;
+        FrameTimeout = ResponseTimeout + 2 * maxFrameTime;
+    }
+
+    /// <summary>
+    /// How long a receive waits for the first byte of the reply.
+    /// </summary>
+    public TimeSpan ResponseTimeout { get; }
+
+    /// <summary>
+    /// The longest gap allowed between the bytes of a frame; after it the partial frame is dropped.
+    /// </summary>
+    public TimeSpan InterCharacterTimeout { get; }
+
+    /// <summary>
+    /// The longest a receive may take in all: <see cref="ResponseTimeout"/> plus twice the time to
+    /// transmit a maximum-size frame, which leaves room for the frame and as much noise again before
+    /// it. A 261-byte frame at 300 baud (11-bit characters) takes 9.57 s, so this is 20.4 s there and
+    /// 2.7 s at 2400 baud. It only ends a receive that keeps getting bytes without a valid frame.
+    /// </summary>
+    public TimeSpan FrameTimeout { get; }
+
+    /// <summary>
+    /// How long a send may take.
+    /// </summary>
+    public TimeSpan WriteTimeout { get; }
+
+    /// <summary>
+    /// Whether the port is open and has not been seen to close.
+    /// </summary>
+    public bool IsConnected => _connection is { Closed: false, EndOfStream: false } connection && connection.Port.IsOpen;
+
+    private TimeSpan BitTimes(double bits) =>
+        TimeSpan.FromTicks((long)Math.Round(bits * TimeSpan.TicksPerSecond / _options.BaudRate));
+
+    private static double CharacterBits(SerialMBusTransportOptions options) =>
+        1 + options.DataBits + (options.Parity == Parity.None ? 0 : 1) + options.StopBits switch
         {
-            ReadTimeout = (int)_timeout.TotalMilliseconds,
-            WriteTimeout = (int)_timeout.TotalMilliseconds,
-            Handshake = Handshake.None,
+            StopBits.OnePointFive => 1.5,
+            StopBits.Two => 2,
+            _ => 1,
         };
 
-        _serialPort.Open();
-        _serialPort.DiscardInBuffer();
-        _serialPort.DiscardOutBuffer();
+    private static int Milliseconds(TimeSpan timeout) => (int)Math.Min(int.MaxValue, Math.Ceiling(timeout.TotalMilliseconds));
 
-        _reader = PipeReader.Create(_serialPort.BaseStream, new StreamPipeReaderOptions(leaveOpen: true));
+    private static TimeSpan? Positive(TimeSpan? value, string name)
+    {
+        if (value is { } timeout)
+            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero, name);
+        return value;
+    }
 
-        return ValueTask.CompletedTask;
+    /// <summary>
+    /// Opens the port, closing any previous one first. SerialPort.Open is synchronous and can take a
+    /// while on some USB drivers, so it runs on a thread-pool thread rather than the caller's; a
+    /// cancellation that arrives during Open takes effect once it returns.
+    /// </summary>
+    public async ValueTask ConnectAsync(CancellationToken ct = default)
+    {
+        Connection? previous;
+        lock (_sync)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            previous = _connection;
+            _connection = null;
+        }
+        Close(previous);
+
+        using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _disposeCts.Token);
+        var port = new SerialPort(_portName, _options.BaudRate, _options.Parity, _options.DataBits, _options.StopBits)
+        {
+            Handshake = Handshake.None,
+            DtrEnable = _options.DtrEnable,
+            RtsEnable = _options.RtsEnable,
+
+            // The transport's own timers end reads and writes. On Windows, whose SerialStream ignores
+            // the token of an async read and write, a read that sees no byte for ReadPollInterval ends
+            // with 0 bytes and SerialReadStream checks the token and reads again; it still returns as
+            // soon as a byte arrives. Unix ignores both values for async reads and writes.
+            ReadTimeout = Milliseconds(ReadPollInterval),
+            WriteTimeout = Milliseconds(WriteTimeout),
+        };
+
+        Connection connection;
+        try
+        {
+            await Task.Run(() =>
+            {
+                port.Open();
+                port.DiscardInBuffer();
+                port.DiscardOutBuffer();
+            }, connectCts.Token);
+            connectCts.Token.ThrowIfCancellationRequested();
+
+            connection = new Connection(port);
+        }
+        catch (Exception ex)
+        {
+            port.Dispose();
+            if (ex is OperationCanceledException && _disposeCts.IsCancellationRequested && !ct.IsCancellationRequested)
+                throw new ObjectDisposedException(GetType().FullName);
+            throw;
+        }
+
+        bool disposed;
+        lock (_sync)
+        {
+            disposed = _disposed;
+            if (!disposed)
+            {
+                // Another ConnectAsync may have finished in the meantime; the last one wins
+                previous = _connection;
+                _connection = connection;
+            }
+        }
+
+        if (disposed)
+        {
+            Close(connection);
+            throw new ObjectDisposedException(GetType().FullName);
+        }
+
+        Close(previous);
     }
 
     public async ValueTask SendFrameAsync(ReadOnlyMemory<byte> frameBytes, CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        var connection = GetConnection();
 
-        if (_serialPort is null || !_serialPort.IsOpen)
-            throw new InvalidOperationException("Transport is not connected");
+        // Set before writing: the converter echoes while the bytes go out
+        _echo = _options.EchoSuppression ? frameBytes.ToArray() : null;
 
-        await _serialPort.BaseStream.WriteAsync(frameBytes, ct);
-        await _serialPort.BaseStream.FlushAsync(ct);
+        // WriteTimeout does not bound async writes on every platform
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(WriteTimeout);
+
+        try
+        {
+            var stream = connection.Port.BaseStream;
+            await stream.WriteAsync(frameBytes, timeoutCts.Token);
+
+            // On Unix the flush waits for the output to drain and ignores its token, so stop waiting on our own
+            await stream.FlushAsync(timeoutCts.Token).WaitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested && !connection.Closed)
+        {
+            throw new TimeoutException($"M-Bus frame not sent within {WriteTimeout.TotalMilliseconds} ms");
+        }
+        catch (Exception ex) when (connection.Closed && IsAbort(ex))
+        {
+            throw ClosedWhilePending(ex);
+        }
     }
 
     public async ValueTask<ReadOnlyMemory<byte>> ReceiveFrameAsync(CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        if (_reader is null)
-            throw new InvalidOperationException("Transport is not connected");
-
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeoutCts.CancelAfter(_timeout);
-
-        while (true)
+        var connection = BeginReceive();
+        try
         {
-            var result = await _reader.ReadAsync(timeoutCts.Token);
-            var buffer = result.Buffer;
+            return await ReceiveFrameAsync(connection, ct);
+        }
+        catch (Exception ex) when (connection.Closed && IsAbort(ex))
+        {
+            throw ClosedWhilePending(ex);
+        }
+        finally
+        {
+            EndReceive(connection);
+        }
+    }
 
-            if (TryReadFrame(ref buffer, out var frame))
+    /// <summary>
+    /// Waits up to <see cref="ResponseTimeout"/> for a reply to start. Once a frame has started, each
+    /// gap may last up to <see cref="InterCharacterTimeout"/>, and the whole receive up to
+    /// <see cref="FrameTimeout"/>. Noise that does not start a frame does not shorten the wait for the reply.
+    /// </summary>
+    private async ValueTask<ReadOnlyMemory<byte>> ReceiveFrameAsync(Connection connection, CancellationToken ct)
+    {
+        var reader = connection.Reader;
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(ResponseTimeout);
+        var started = Stopwatch.GetTimestamp();
+        var frameStarted = false;
+
+        try
+        {
+            while (true)
             {
-                _reader.AdvanceTo(buffer.Start);
-                return frame;
+                var result = await reader.ReadAsync(timeoutCts.Token);
+                var buffer = result.Buffer;
+
+                while (MBusDeframer.TryReadFrame(ref buffer, out var frame))
+                {
+                    // The echo, if any, comes before the reply. A request is never a valid reply,
+                    // so a frame equal to it can only be the echo.
+                    if (Interlocked.Exchange(ref _echo, null) is { } echo && frame.Length == echo.Length && frame.ToArray().AsSpan().SequenceEqual(echo))
+                    {
+                        // The slave's answer window starts at the end of the request
+                        started = Stopwatch.GetTimestamp();
+                        continue;
+                    }
+
+                    var bytes = frame.ToArray();
+                    reader.AdvanceTo(buffer.Start);
+                    return bytes;
+                }
+
+                // buffer.Start is past any noise, so at most one partial frame stays buffered
+                reader.AdvanceTo(buffer.Start, result.Buffer.End);
+
+                if (result.IsCompleted)
+                {
+                    connection.EndOfStream = true;
+                    throw new IOException("Serial port closed before a complete frame was received");
+                }
+
+                frameStarted = !buffer.IsEmpty;
+                var elapsed = Stopwatch.GetElapsedTime(started);
+                var remaining = frameStarted
+                    ? TimeSpan.FromTicks(Math.Min(InterCharacterTimeout.Ticks, (FrameTimeout - elapsed).Ticks))
+                    : ResponseTimeout - elapsed;
+                timeoutCts.CancelAfter(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero);
+            }
+        }
+        catch (OperationCanceledException) when (!connection.Closed)
+        {
+            // The exchange is over: a partial frame left in the pipe would swallow the next reply
+            DiscardBufferedBytes(reader);
+
+            if (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                throw new TimeoutException(frameStarted
+                    ? $"M-Bus frame incomplete: no further byte within {InterCharacterTimeout.TotalMilliseconds} ms, or not complete within {FrameTimeout.TotalMilliseconds} ms"
+                    : $"No M-Bus reply started within {ResponseTimeout.TotalMilliseconds} ms");
             }
 
-            // buffer.Start is past any noise, so at most one partial frame (< 261 bytes) stays buffered
-            _reader.AdvanceTo(buffer.Start, result.Buffer.End);
-
-            if (result.IsCompleted)
-                throw new InvalidOperationException("Serial port closed before complete frame received");
+            throw;
         }
     }
 
     public ValueTask DiscardInputAsync(CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        var connection = GetConnection();
 
-        if (_reader is null || _serialPort is null || !_serialPort.IsOpen)
-            throw new InvalidOperationException("Transport is not connected");
-
-        // After a timed-out receive every buffered byte counts as examined, and TryRead only
-        // hands such bytes back when the read is cancelled
-        _reader.CancelPendingRead();
-        if (_reader.TryRead(out var result))
-            _reader.AdvanceTo(result.Buffer.End);
+        DiscardBufferedBytes(connection.Reader);
 
         // Bytes the driver holds have not reached the pipe yet; they are stale too
-        _serialPort.DiscardInBuffer();
+        connection.Port.DiscardInBuffer();
 
         return ValueTask.CompletedTask;
     }
 
-    private static ReadOnlySpan<byte> FrameStartBytes =>
-        [MBusConstants.FRAME_ACK_START, MBusConstants.FRAME_SHORT_START, MBusConstants.FRAME_LONG_START];
-
     /// <summary>
-    /// Finds the first frame in <paramref name="buffer"/>, skipping bytes that cannot start one.
-    /// On return <paramref name="buffer"/> starts after the frame, or at the partial frame that needs more data.
-    /// Checksums are left to the frame parser.
+    /// Drops the bytes the pipe holds but has not returned as a frame.
     /// </summary>
-    private static bool TryReadFrame(ref ReadOnlySequence<byte> buffer, out ReadOnlyMemory<byte> frame)
+    private static void DiscardBufferedBytes(PipeReader reader)
     {
-        frame = default;
+        // After a receive every buffered byte counts as examined, and TryRead only
+        // hands such bytes back when the read is cancelled
+        reader.CancelPendingRead();
+        if (reader.TryRead(out var result))
+            reader.AdvanceTo(result.Buffer.End);
+    }
 
-        while (true)
+    private Connection GetConnection()
+    {
+        lock (_sync)
         {
-            var reader = new SequenceReader<byte>(buffer);
-            if (!reader.TryAdvanceToAny(FrameStartBytes, advancePastDelimiter: false))
-            {
-                buffer = buffer.Slice(buffer.End);
-                return false;
-            }
-
-            buffer = buffer.Slice(reader.Position);
-
-            var frameLength = GetFrameLength(buffer);
-            if (frameLength == 0)
-                return false;
-
-            if (frameLength < 0)
-            {
-                // Not a frame after all: resynchronise on the next byte
-                buffer = buffer.Slice(1);
-                continue;
-            }
-
-            frame = buffer.Slice(0, frameLength).ToArray();
-            buffer = buffer.Slice(frameLength);
-            return true;
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _connection ?? throw new InvalidOperationException("Transport is not connected");
         }
     }
 
-    /// <summary>
-    /// Returns the length of the frame starting at the first byte of <paramref name="buffer"/>,
-    /// 0 when more bytes are needed to tell, or -1 when the header or stop byte rules it out.
-    /// </summary>
-    private static int GetFrameLength(ReadOnlySequence<byte> buffer)
+    private Connection BeginReceive()
     {
-        var reader = new SequenceReader<byte>(buffer);
-        reader.TryPeek(out var startByte);
-
-        switch (startByte)
+        lock (_sync)
         {
-            case MBusConstants.FRAME_ACK_START:
-                return 1;
+            var connection = GetConnection();
+            if (connection.Receiving)
+                throw new InvalidOperationException("A receive is already in progress");
 
-            case MBusConstants.FRAME_SHORT_START:
-                if (!reader.TryPeek(MBusConstants.FRAME_FIXED_SIZE_SHORT - 1, out var shortStop))
-                    return 0;
-
-                return shortStop == MBusConstants.FRAME_STOP ? MBusConstants.FRAME_FIXED_SIZE_SHORT : -1;
-
-            case MBusConstants.FRAME_LONG_START:
-                // 68 L L 68, where L covers at least C, A and CI. Reject on the first wrong
-                // header byte so a stray 0x68 does not hold back the bytes that follow it.
-                if (!reader.TryPeek(1, out var len))
-                    return 0;
-                if (len < 3)
-                    return -1;
-                if (!reader.TryPeek(2, out var lenRepeated))
-                    return 0;
-                if (lenRepeated != len)
-                    return -1;
-                if (!reader.TryPeek(3, out var secondStart))
-                    return 0;
-                if (secondStart != MBusConstants.FRAME_LONG_START)
-                    return -1;
-
-                var frameLength = len + MBusConstants.FRAME_FIXED_SIZE_LONG;
-                if (!reader.TryPeek(frameLength - 1, out var longStop))
-                    return 0;
-
-                return longStop == MBusConstants.FRAME_STOP ? frameLength : -1;
-
-            default:
-                return -1;
+            connection.Receiving = true;
+            return connection;
         }
     }
 
-    public async ValueTask DisposeAsync()
+    private void EndReceive(Connection connection)
     {
-        if (!_disposed)
+        bool closed;
+        lock (_sync)
         {
+            connection.Receiving = false;
+            closed = connection.Closed;
+        }
+
+        // Close left the reader to us
+        if (closed)
+            connection.Reader.Complete();
+    }
+
+    /// <summary>
+    /// Closes the port, which ends a pending read or write on it.
+    /// </summary>
+    private void Close(Connection? connection)
+    {
+        if (connection is null)
+            return;
+
+        bool receiving;
+        lock (_sync)
+        {
+            connection.Closed = true;
+            receiving = connection.Receiving;
+        }
+
+        connection.Port.Dispose();
+
+        // Completing the reader while a receive is inside ReadAsync would race it; the receive does it on its way out
+        if (!receiving)
+            connection.Reader.Complete();
+    }
+
+    private static bool IsAbort(Exception ex) =>
+        ex is OperationCanceledException or IOException or ObjectDisposedException or InvalidOperationException;
+
+    /// <summary>
+    /// The exception for an operation whose port was closed under it by Dispose or ConnectAsync.
+    /// </summary>
+    private Exception ClosedWhilePending(Exception ex) => _disposed
+        ? new ObjectDisposedException(GetType().FullName)
+        : new IOException("The serial port was closed by a reconnect", ex);
+
+    public void Dispose()
+    {
+        Connection? connection;
+        lock (_sync)
+        {
+            if (_disposed)
+                return;
+
             _disposed = true;
-
-            if (_reader is not null)
-                await _reader.CompleteAsync();
-
-            if (_serialPort is not null)
-            {
-                if (_serialPort.IsOpen)
-                    _serialPort.Close();
-                _serialPort.Dispose();
-            }
+            connection = _connection;
+            _connection = null;
         }
+
+        // Ends a ConnectAsync in progress
+        _disposeCts.Cancel();
+        Close(connection);
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    private sealed class Connection
+    {
+        public Connection(SerialPort port)
+        {
+            Port = port;
+            Reader = PipeReader.Create(new SerialReadStream(port.BaseStream, () => port.IsOpen), new StreamPipeReaderOptions(leaveOpen: true));
+        }
+
+        public SerialPort Port { get; }
+        public PipeReader Reader { get; }
+
+        // Written under the transport's lock, read without it by exception filters
+        public volatile bool Closed;
+        public volatile bool Receiving;
+        public volatile bool EndOfStream;
     }
 }
