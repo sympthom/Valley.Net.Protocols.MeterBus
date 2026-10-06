@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -17,22 +20,25 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # The tag is the single source of truth for the package version: v4.0.0 -> 4.0.0
+      - name: Version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
       - name: Restore dependencies
         run: dotnet restore Valley.Net.Protocols.MeterBus.sln
 
       - name: Build
-        run: dotnet build Valley.Net.Protocols.MeterBus.sln --configuration Release --no-restore
+        run: dotnet build Valley.Net.Protocols.MeterBus.sln --configuration Release --no-restore -p:Version=$VERSION
 
       - name: Unit Tests
         run: dotnet test --project tests/Valley.Net.Protocols.MeterBus.Tests/Valley.Net.Protocols.MeterBus.Tests.csproj --configuration Release --no-build
 
       - name: Pack
         run: |
-          dotnet pack src/Valley.Net.Protocols.MeterBus.Abstractions/Valley.Net.Protocols.MeterBus.Abstractions.csproj --configuration Release --no-build --output ./nupkg
-          dotnet pack src/Valley.Net.Protocols.MeterBus/Valley.Net.Protocols.MeterBus.csproj --configuration Release --no-build --output ./nupkg
-          dotnet pack src/Valley.Net.Protocols.MeterBus.Transport.Tcp/Valley.Net.Protocols.MeterBus.Transport.Tcp.csproj --configuration Release --no-build --output ./nupkg
-          dotnet pack src/Valley.Net.Protocols.MeterBus.Transport.Udp/Valley.Net.Protocols.MeterBus.Transport.Udp.csproj --configuration Release --no-build --output ./nupkg
-          dotnet pack src/Valley.Net.Protocols.MeterBus.Transport.Serial/Valley.Net.Protocols.MeterBus.Transport.Serial.csproj --configuration Release --no-build --output ./nupkg
+          for project in src/*/*.csproj; do
+            dotnet pack "$project" --configuration Release --no-build -p:Version=$VERSION --output ./nupkg
+          done
 
+      # Pushes the .snupkg symbol packages alongside the .nupkg files
       - name: Push to NuGet
         run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

@@ -1,0 +1,40 @@
+<Project>
+
+  <!-- Shared settings for every package under src/. publish.yml overrides Version from the git tag (vX.Y.Z). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <Version>4.0.0</Version>
+    <Authors>Martin Dahlstedt</Authors>
+    <Company>Valley</Company>
+    <Copyright>Copyright (c) Martin Dahlstedt</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/sympthom/Valley.Net.Protocols.MeterBus</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/sympthom/Valley.Net.Protocols.MeterBus</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>mbus;m-bus;meter-bus;meterbus;en13757;smart-meter;metering;libmbus</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>MBusLogo240.jpg</PackageIcon>
+    <PackageReleaseNotes>https://github.com/sympthom/Valley.Net.Protocols.MeterBus/blob/master/README.md#changelog</PackageReleaseNotes>
+
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Not every public member has XML docs yet; ship the ones that exist without a warning per gap. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <IsAotCompatible>true</IsAotCompatible>
+
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)..\MBusLogo240.jpg" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>
